@@ -362,32 +362,46 @@ class BTCFullPosition2_1(IStrategy):
 
         # 最终建仓条件
         dataframe.loc[pass_max_drop | condition_2, 'enter_long'] = 1
-        
+
         # 调试信息：显示建仓信号数量
         entry_count = (pass_max_drop | condition_2).sum()
         if entry_count > 0:
             print(f"[DEBUG] 生成 {entry_count} 个建仓信号 | "
                   f"条件1: {pass_max_drop.sum()} | 条件2: {condition_2.sum()}")
-        
+
         # 添加条件状态说明字段（用于UI查看）
         dataframe['enter_tag'] = ''
-        
+
         # 计算从最高点下跌幅度（用于标签显示）
         drop_from_high = (dataframe['max_90'] - dataframe['close']) / dataframe['max_90']
-        
+
         # 为满足条件的行添加标签
         # 只满足条件1（从最高点下跌）
         dataframe.loc[pass_max_drop & ~condition_2, 'enter_tag'] = (
-            'C1:max90跌' + (drop_from_high * 100).round(1).astype(str) + '%'
+                'C1:max90跌' + (drop_from_high * 100).round(1).astype(str) + '%'
         )
-        
+
         # 只满足条件2（涨幅+图形反转）
         dataframe.loc[~pass_max_drop & condition_2, 'enter_tag'] = 'C2:涨+反转'
-        
+
         # 同时满足条件1和条件2
         dataframe.loc[pass_max_drop & condition_2, 'enter_tag'] = (
-            'C1+C2:max90跌' + (drop_from_high * 100).round(1).astype(str) + '%+涨+反转'
+                'C1+C2:max90跌' + (drop_from_high * 100).round(1).astype(str) + '%+涨+反转'
         )
+
+        # ==================== 新增：每分钟强制填充当前蜡烛的买入信号 ====================
+        if len(dataframe) >= 2:
+            prev_entry = dataframe['enter_long'].iloc[-2]
+            if pd.notna(prev_entry):
+                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = int(prev_entry)
+                logger.info(
+                    f"[populate_entry_trend] 强制填充当前蜡烛信号: 使用前一根蜡烛的 enter_long = {int(prev_entry)}")
+            else:
+                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
+                logger.info("[populate_entry_trend] 前一根蜡烛无信号，当前蜡烛强制填充 enter_long = 0")
+        elif len(dataframe) == 1:
+            dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
+            logger.info("[populate_entry_trend] 数据不足，当前蜡烛强制填充 enter_long = 0")
 
         return dataframe
 
@@ -488,31 +502,61 @@ class BTCFullPosition2_1(IStrategy):
 
         # 最终平仓条件
         dataframe.loc[drop_condition & dataframe['pattern_exit_signal'], 'exit_long'] = 1
-        
+
         # 添加条件状态说明字段（用于UI查看）
         dataframe['exit_tag'] = ''
-        
+
         # 为满足平仓条件的行添加标签
         exit_mask = drop_condition & dataframe['pattern_exit_signal']
-        
+
         # 判断是单日跌幅还是连续跌幅触发
         single_drop_only = exit_mask & single_day_drop & ~continuous_drop
         continuous_drop_only = exit_mask & continuous_drop & ~single_day_drop
         both_drop = exit_mask & single_day_drop & continuous_drop
-        
+
         # 添加标签
         dataframe.loc[single_drop_only, 'exit_tag'] = '单日跌+双顶'
         dataframe.loc[continuous_drop_only, 'exit_tag'] = '连续跌+双顶'
         dataframe.loc[both_drop, 'exit_tag'] = '单日跌+连续跌+双顶'
-        
+
         # 当同时出现买入和卖出信号时，只保留卖出信号
         # 这样可以避免在同一天同时执行买入和卖出操作
         exit_signal_exists = dataframe['exit_long'] == 1
         entry_signal_exists = dataframe['enter_long'] == 1
-        
+
         # 如果某根K线上同时有买入和卖出信号，则取消买入信号
         conflict_mask = exit_signal_exists & entry_signal_exists
         dataframe.loc[conflict_mask, 'enter_long'] = 0
+
+        # ==================== 新增：每分钟强制填充当前蜡烛的信号 ====================
+        # 目的：让 adjust_trade_position 每分钟都能读取到一个明确的 0 或 1，而不是 NaN
+        # 逻辑：用前一根已闭合蜡烛的信号填充当前未闭合蜡烛（最安全、最可靠）
+        if len(dataframe) >= 2:
+            # 前一根闭合蜡烛的 exit_long 值（一定是 0 或 1，或 NaN 如果太早）
+            prev_exit = dataframe['exit_long'].iloc[-2]
+            # 如果前一根有明确信号（0 或 1），则复制到当前行
+            if pd.notna(prev_exit):
+                dataframe.iloc[-1, dataframe.columns.get_loc('exit_long')] = int(prev_exit)
+                logger.info(
+                    f"[populate_exit_trend] 强制填充当前蜡烛信号: 使用前一根蜡烛的 exit_long = {int(prev_exit)}")
+            else:
+                # 如果前一根也无信号（极早期），默认填 0（不卖出）
+                dataframe.iloc[-1, dataframe.columns.get_loc('exit_long')] = 0
+                logger.info("[populate_exit_trend] 前一根蜡烛无信号，当前蜡烛强制填充 exit_long = 0")
+        elif len(dataframe) == 1:
+            # 只有一根蜡烛（启动初期），默认不卖出
+            dataframe.iloc[-1, dataframe.columns.get_loc('exit_long')] = 0
+            logger.info("[populate_exit_trend] 数据不足，只有一根蜡烛，当前蜡烛强制填充 exit_long = 0")
+
+        # 同理，也为 enter_long 做相同填充（防止买入信号也出现 NaN，影响冲突处理）
+        if len(dataframe) >= 2:
+            prev_entry = dataframe['enter_long'].iloc[-2]
+            if pd.notna(prev_entry):
+                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = int(prev_entry)
+            else:
+                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
+        elif len(dataframe) == 1:
+            dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
 
         return dataframe
 
