@@ -1,0 +1,89 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "max_open_trades": 1,
+  "stake_currency": "USDT",
+  "stake_amount": "unlimited",
+  "tradable_balance_ratio": 0.99,
+  "amend_last_stake_amount": true, 
+  "position_adjustment_enable": true,
+  "fiat_display_currency": "USD",
+  "dry_run": false,
+  "cancel_open_orders_on_exit": false,
+  
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  
+  "exchange": {
+    "name": "binance",
+    "key": "eSJi1tUr5t6zCRzIP8sMf97dMBFAM01c01OnidXaHEyK3T0cihABbDPei8a0rZ9n",
+    "secret": "WD6E1nF6AEy2vZ5VmorQlyFAZaW8OvALUBFr3npxEdQHaY1YpZa8TIbs9BGnqO8O",
+    "ccxt_config": {
+      "httpsProxy": "http://127.0.0.1:7890",
+      "wsProxy": "http://127.0.0.1:7890",
+      "enableRateLimit": true,
+      "rateLimit": 1000
+    },
+    "ccxt_async_config": {
+      "enableRateLimit": true,
+      "rateLimit": 1000
+    },
+    "pair_whitelist": [
+      "BTC/USDT"
+    ]
+  },
+  
+  "trading_mode": "spot",
+  "margin_mode": "",
+  "fee": 0.001,
+  
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "127.0.0.1",
+    "listen_port": 8092,
+    "verbosity": "error",
+    "jwt_secret_key": "btc_fullposition_2025",
+    "CORS_origins": ["http://127.0.0.1:3000"],
+    "username": "admin",
+    "password": "admin123"
+  },
+  
+  "bot_name": "BTC_FullPosition",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 60
+  },
+  
+  "strategy": "BTCFullPosition",
+  "strategy_path": "user_data/btc",
+  "db_url": "sqlite:///tradesv3_btc_fullposition.sqlite",
+  "user_data_dir": "user_data",
+  "data_dir": "user_data/data",
+  
+  "ui": {
+    "backtest_results_dir": "user_data/backtest_results"
+  }
+}
+
+
+

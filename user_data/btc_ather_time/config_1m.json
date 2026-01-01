@@ -1,0 +1,91 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "max_open_trades": 1,
+  "stake_currency": "USDT",
+  "stake_amount": "unlimited",
+  "tradable_balance_ratio": 0.99,
+  "fiat_display_currency": "USD",
+  "dry_run": true,
+  "cancel_open_orders_on_exit": false,
+  
+  "use_exit_signal": true,
+  "exit_profit_only": false,
+  "ignore_roi_if_entry_signal": false,
+  
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  
+  "exchange": {
+    "name": "binance",
+    "key": "7ttBchCkWJIGAEhhxOlhhNAsi6gHaudHUAIFDYwL0kYDRfHTDK86HQow9dcGFQ2Fe",
+    "secret": "b3Ap81OirgyYmUTVTQ3cNws5IQWRru87H5i8dJp7rNTRwEW5lWm0XAqsuxmHkPTw",
+    "ccxt_config": {
+      "httpsProxy": "http://127.0.0.1:7890",
+      "wsProxy": "http://127.0.0.1:7890",
+      "enableRateLimit": true,
+      "rateLimit": 1000
+    },
+    "ccxt_async_config": {
+      "enableRateLimit": true,
+      "rateLimit": 1000
+    },
+    "pair_whitelist": [
+      "BTC/USDT"
+    ]
+  },
+  
+  "trading_mode": "spot",
+  "margin_mode": "",
+  "fee": 0.001,
+  
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "127.0.0.1",
+    "listen_port": 8087,
+    "verbosity": "error",
+    "jwt_secret_key": "BTCFullPosition_1m_2025",
+    "CORS_origins": ["http://127.0.0.1:3000", "http://localhost:3000"],
+    "username": "admin",
+    "password": "admin123"
+  },
+  
+  "bot_name": "BTCFullPosition_1m",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 60
+  },
+  
+  "strategy": "BTCFullPosition_1m",
+  "strategy_path": "user_data/strategies",
+  "db_url": "sqlite:///tradesv3.sqlite",
+  "user_data_dir": "user_data",
+  "data_dir": "user_data/data",
+  
+  "ui": {
+    "backtest_results_dir": "user_data/backtest_results"
+  }
+}
+
+
+

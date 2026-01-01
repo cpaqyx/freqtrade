@@ -1,0 +1,37 @@
+{
+  "strategy_name": "BTCFullPosition2_1",
+  "params": {
+    "roi": {
+      "0": 10.0
+    },
+    "stoploss": {
+      "stoploss": -0.99
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 1
+    },
+    "buy": {
+      "continuous_rise_threshold": 0.03,
+      "day_rise_threshold": 0.01,
+      "double_top_threshold": 0.08,
+      "max_drop_from_high": 0.20,
+      "pattern_drop_threshold": 0.01
+    },
+    "sell": {
+      "continuous_drop_threshold": 0.01,
+      "day_drop_threshold": 0.01,
+      "double_top_higher_threshold": 0.12,
+      "double_top_lower_threshold": 0.08,
+      "last_down_threshold": 0.12
+    },
+    "protection": {}
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2025-11-28 10:18:55.818630+00:00"
+}

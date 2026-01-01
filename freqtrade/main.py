@@ -6,13 +6,20 @@ Read the documentation to know what cli arguments you need.
 
 import logging
 import sys
+from pathlib import Path
 from typing import Any
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 # check min. python version
 if sys.version_info < (3, 11):  # pragma: no cover  # noqa: UP036
     sys.exit("Freqtrade requires Python version >= 3.11")
 
+# ruff: noqa: E402  # Allow project path adjustments before importing freqtrade modules
 from freqtrade import __version__
 from freqtrade.commands import Arguments
 from freqtrade.constants import DOCS_LINK
