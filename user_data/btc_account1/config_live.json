@@ -1,6 +1,8 @@
 {
   "$schema": "https://schema.freqtrade.io/schema.json",
   "max_open_trades": 1,
+  "startup_candle_count": 100,
+  "historical_data_length": 100,
   "stake_currency": "USDT",
   "stake_amount": "unlimited",
   "tradable_balance_ratio": 0.99,
@@ -26,9 +28,10 @@
     "use_order_book": true,
     "order_book_top": 1
   },
-  
+
   "exchange": {
     "name": "binance",
+    "markets_refresh_interval": 5,
     "key": "7ttBchCkWJIGAEhhxOlhhNAsi6gHauHUAIFDYwL0kYDRfHTDK86HQow9dcGFQ2Fe",
     "secret": "b3Ap81OirgyYmUTVTQ3cNws5IQWRru87H5i8dJp7rNTRwEW5lWm0XAqsuxmHkPTw",
     "ccxt_config": {
