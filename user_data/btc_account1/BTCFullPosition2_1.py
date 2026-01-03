@@ -34,7 +34,8 @@ class BTCFullPosition2_1(IStrategy):
     - 全仓进出
     - 基于90日图形分析
     """
-    startup_candle_count: int = 120  # 下载的k线数量
+    # 启动所需K线数量：至少需要90根历史K线才能计算指标,多出90根的则是计算前一段时间的信号，方便查看, 以配置文件中的为准
+    startup_candle_count: int = 150
 
     # 保持默认行为：只有新K线时才完整执行策略函数（每天执行一次）
     process_only_new_candles = False
@@ -56,9 +57,6 @@ class BTCFullPosition2_1(IStrategy):
     # 是否允许做空：仅做多，不做空
     can_short = False
 
-    # 启动所需K线数量：至少需要90根历史K线才能计算指标
-    # 原因：rolling(90) 需要90根K线，图形分析也需要90根
-    startup_candle_count = 100
 
     # 仓位调整：禁用加仓/减仓功能，仅全仓进出
     # position_adjustment_enable = False
@@ -173,62 +171,6 @@ class BTCFullPosition2_1(IStrategy):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         # logger.info("[OK] BTC全仓策略已初始化")
-
-    def check_double_top(self, up_segments: list, price_a: float, segment_name: str = "") -> bool:
-        """
-        检测双顶形态
-
-        参数:
-            up_segments: up段列表（已按从最近到最远排序）
-            price_a: 基准价格A
-            segment_name: 段名称（用于日志）
-
-        返回:
-            bool: 是否检测到双顶
-        """
-        # 需要至少1个前面的up段来比较
-        if len(up_segments) < 1:
-            return False
-
-        # 比较A与第一个前面的up段B
-        price_b = up_segments[0]['max_price']
-
-        # A比B高3%以内 或 A比B低5%以内
-        if price_a >= price_b:
-            # A比B高的情况
-            diff_higher = (price_a - price_b) / price_b
-            if diff_higher <= self.double_top_higher_threshold.value:
-                # logger.info(
-                #     f"[SELL] 平仓信号{segment_name}-AB: A比B高{diff_higher:.2%} (A={price_a:.2f}, B={price_b:.2f})")
-                return True
-        else:
-            # A比B低的情况
-            diff_lower = (price_b - price_a) / price_b
-            if diff_lower <= self.double_top_lower_threshold.value:
-                # logger.info(
-                #     f"[SELL] 平仓信号{segment_name}-AB: A比B低{diff_lower:.2%} (A={price_a:.2f}, B={price_b:.2f})")
-                return True
-
-        # 如果AB不成立，比较A与第二个前面的up段C
-        if len(up_segments) >= 2:
-            price_c = up_segments[1]['max_price']
-
-            if price_a >= price_c:
-                # A比C高的情况
-                diff_higher = (price_a - price_c) / price_c
-                if diff_higher <= self.double_top_higher_threshold.value:
-                    # logger.info(
-                    #     f"[SELL] 平仓信号{segment_name}-AC: A比C高{diff_higher:.2%} (A={price_a:.2f}, C={price_c:.2f})")
-                    return True
-            else:
-                # A比C低的情况
-                diff_lower = (price_c - price_a) / price_c
-                if diff_lower <= self.double_top_lower_threshold.value:
-                    # logger.info(
-                    #     f"[SELL] 平仓信号{segment_name}-AC: A比C低{diff_lower:.2%} (A={price_a:.2f}, C={price_c:.2f})")
-                    return True
-
-        return False
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         print("populate_indicators执行")
@@ -470,7 +412,8 @@ class BTCFullPosition2_1(IStrategy):
                             up_segments.append(pattern[j])
 
                     # 使用独立方法检测双顶
-                    if self.check_double_top(up_segments, price_a, "(情况1.1)"):
+                    if self.check_double_top(up_segments, price_a, self.double_top_higher_threshold.value,
+                                             self.double_top_lower_threshold.value, "(情况1.1)"):
                         dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                         continue
 
@@ -493,7 +436,8 @@ class BTCFullPosition2_1(IStrategy):
                             remaining_up_segments = up_segments[1:]
 
                             # 使用独立方法检测双顶
-                            if self.check_double_top(remaining_up_segments, price_a, "(情况1.2)"):
+                            if self.check_double_top(remaining_up_segments, price_a, self.double_top_higher_threshold.value,
+                                             self.double_top_lower_threshold.value, "(情况1.2)"):
                                 dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                                 continue
 
@@ -606,10 +550,12 @@ class BTCFullPosition2_1(IStrategy):
                 sell_stake = (trade.amount + extra_coin) * current_rate * 0.99
                 logger.info(f"[adjust_trade_position] 全卖 + 尘埃 ({extra_coin:.8f} {coin})，返回 -{sell_stake:.2f}")
                 return -sell_stake
-            else:
+            elif trade.stake_amount > 0:
                 # 只卖机器人持仓
                 logger.info(f"[adjust_trade_position] 全卖机器人持仓，返回 -{trade.stake_amount:.2f}")
                 return -trade.stake_amount
+            else:
+                logger.info(f"[adjust_trade_position] 全卖无持仓-{trade.stake_amount:.2f}")
 
         # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入）
         elif last_row.get('enter_long', 0) == 1:

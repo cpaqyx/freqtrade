@@ -1,6 +1,63 @@
 import numpy as np
 
 
+def check_double_top(up_segments: list, price_a: float, double_top_higher_threshold, double_top_lower_threshold,
+                     segment_name: str = "") -> bool:
+    """
+    检测双顶形态
+
+    参数:
+        up_segments: up段列表（已按从最近到最远排序）
+        price_a: 基准价格A
+        segment_name: 段名称（用于日志）
+
+    返回:
+        bool: 是否检测到双顶
+    """
+    # 需要至少1个前面的up段来比较
+    if len(up_segments) < 1:
+        return False
+
+    # 比较A与第一个前面的up段B
+    price_b = up_segments[0]['max_price']
+
+    # A比B高3%以内 或 A比B低5%以内
+    if price_a >= price_b:
+        # A比B高的情况
+        diff_higher = (price_a - price_b) / price_b
+        if diff_higher <= double_top_higher_threshold:
+            # logger.info(
+            #     f"[SELL] 平仓信号{segment_name}-AB: A比B高{diff_higher:.2%} (A={price_a:.2f}, B={price_b:.2f})")
+            return True
+    else:
+        # A比B低的情况
+        diff_lower = (price_b - price_a) / price_b
+        if diff_lower <= double_top_lower_threshold:
+            # logger.info(
+            #     f"[SELL] 平仓信号{segment_name}-AB: A比B低{diff_lower:.2%} (A={price_a:.2f}, B={price_b:.2f})")
+            return True
+
+    # 如果AB不成立，比较A与第二个前面的up段C
+    if len(up_segments) >= 2:
+        price_c = up_segments[1]['max_price']
+
+        if price_a >= price_c:
+            # A比C高的情况
+            diff_higher = (price_a - price_c) / price_c
+            if diff_higher <= double_top_higher_threshold:
+                # logger.info(
+                #     f"[SELL] 平仓信号{segment_name}-AC: A比C高{diff_higher:.2%} (A={price_a:.2f}, C={price_c:.2f})")
+                return True
+        else:
+            # A比C低的情况
+            diff_lower = (price_c - price_a) / price_c
+            if diff_lower <= double_top_lower_threshold:
+                # logger.info(
+                #     f"[SELL] 平仓信号{segment_name}-AC: A比C低{diff_lower:.2%} (A={price_a:.2f}, C={price_c:.2f})")
+                return True
+
+    return False
+
 def kline_1m_shape(close_prices):
     return kline_shape(close_prices, part_cnt=5, part_percent=0.001,
                 first_part_cnt=5, first_part_percent=0.0005, part_single_percent=0.002, debug=False)

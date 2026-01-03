@@ -1,8 +1,7 @@
 {
   "$schema": "https://schema.freqtrade.io/schema.json",
   "max_open_trades": 1,
-  "startup_candle_count": 100,
-  "historical_data_length": 100,
+  "startup_candle_count": 150,
   "stake_currency": "USDT",
   "stake_amount": "unlimited",
   "tradable_balance_ratio": 0.99,
@@ -38,11 +37,13 @@
       "httpsProxy": "http://127.0.0.1:7890",
       "wsProxy": "http://127.0.0.1:7890",
       "enableRateLimit": true,
-      "rateLimit": 1000
+      "rateLimit": 1000,
+      "recvWindow": 30000
     },
     "ccxt_async_config": {
       "enableRateLimit": true,
-      "rateLimit": 1000
+      "rateLimit": 1000,
+      "recvWindow": 30000
     },
     "pair_whitelist": [
       "BTC/USDT"

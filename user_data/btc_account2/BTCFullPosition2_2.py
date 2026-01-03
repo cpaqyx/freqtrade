@@ -28,12 +28,17 @@ logger = logging.getLogger(__name__)
 
 class BTCFullPosition2_2(IStrategy):
     """
-    BTC全仓策略 - 账号2
+    BTC全仓策略 - 账号1
     - 日线级别
     - 只做多
     - 全仓进出
     - 基于90日图形分析
     """
+    # 启动所需K线数量：至少需要90根历史K线才能计算指标,多出90根的则是计算前一段时间的信号，方便查看, 以配置文件中的为准
+    startup_candle_count: int = 150
+
+    # 保持默认行为：只有新K线时才完整执行策略函数（每天执行一次）
+    process_only_new_candles = False
 
     # ==================== 测试模式开关 ====================
     # 立即成交测试模式：用于测试交易流程是否正常
@@ -52,9 +57,6 @@ class BTCFullPosition2_2(IStrategy):
     # 是否允许做空：仅做多，不做空
     can_short = False
 
-    # 启动所需K线数量：至少需要90根历史K线才能计算指标
-    # 原因：rolling(90) 需要90根K线，图形分析也需要90根
-    startup_candle_count = 100
 
     # 仓位调整：禁用加仓/减仓功能，仅全仓进出
     # position_adjustment_enable = False
@@ -170,100 +172,26 @@ class BTCFullPosition2_2(IStrategy):
         super().__init__(config)
         # logger.info("[OK] BTC全仓策略已初始化")
 
-    def check_double_top(self, up_segments: list, price_a: float, segment_name: str = "") -> bool:
-        """
-        检测双顶形态
-
-        参数:
-            up_segments: up段列表（已按从最近到最远排序）
-            price_a: 基准价格A
-            segment_name: 段名称（用于日志）
-
-        返回:
-            bool: 是否检测到双顶
-        """
-        # 需要至少1个前面的up段来比较
-        if len(up_segments) < 1:
-            return False
-
-        # 比较A与第一个前面的up段B
-        price_b = up_segments[0]['max_price']
-
-        # A比B高3%以内 或 A比B低5%以内
-        if price_a >= price_b:
-            # A比B高的情况
-            diff_higher = (price_a - price_b) / price_b
-            if diff_higher <= self.double_top_higher_threshold.value:
-                # logger.info(
-                #     f"[SELL] 平仓信号{segment_name}-AB: A比B高{diff_higher:.2%} (A={price_a:.2f}, B={price_b:.2f})")
-                return True
-        else:
-            # A比B低的情况
-            diff_lower = (price_b - price_a) / price_b
-            if diff_lower <= self.double_top_lower_threshold.value:
-                # logger.info(
-                #     f"[SELL] 平仓信号{segment_name}-AB: A比B低{diff_lower:.2%} (A={price_a:.2f}, B={price_b:.2f})")
-                return True
-
-        # 如果AB不成立，比较A与第二个前面的up段C
-        if len(up_segments) >= 2:
-            price_c = up_segments[1]['max_price']
-
-            if price_a >= price_c:
-                # A比C高的情况
-                diff_higher = (price_a - price_c) / price_c
-                if diff_higher <= self.double_top_higher_threshold.value:
-                    # logger.info(
-                    #     f"[SELL] 平仓信号{segment_name}-AC: A比C高{diff_higher:.2%} (A={price_a:.2f}, C={price_c:.2f})")
-                    return True
-            else:
-                # A比C低的情况
-                diff_lower = (price_c - price_a) / price_c
-                if diff_lower <= self.double_top_lower_threshold.value:
-                    # logger.info(
-                    #     f"[SELL] 平仓信号{segment_name}-AC: A比C低{diff_lower:.2%} (A={price_a:.2f}, C={price_c:.2f})")
-                    return True
-
-        return False
-
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         print("populate_indicators执行")
-        # <<< 新增日志 >>> 记录当前数据帧中最新K线的日期，帮助判断是否刚更新了新日K线
-        if len(dataframe) >= 1:
-            current_candle_date = dataframe.index[-1]
-            logger.info(f"[populate_indicators] 当前正在处理的最新K线日期（当前蜡烛）: {current_candle_date}")
-        if len(dataframe) >= 2:
-            prev_candle_date = dataframe.index[-2]
-            logger.info(f"[populate_indicators] 前一根已完成K线日期: {prev_candle_date}")
-            logger.info(f"[populate_indicators] 数据更新情况: 最新K线={current_candle_date}, "
-                        f"前一根K线={prev_candle_date} "
-                        f"{'（刚进入新一天，数据已更新）' if len(dataframe) > 10 and current_candle_date.date() != prev_candle_date.date() else ''}")
-        # <<< 新增日志结束 >>>
-        """
-        计算指标
-        """
-        # 1. 最近90根最高价和最低价
+        # 强制只用最近 150 根（90天指标 + 60天缓冲）
+        dataframe = dataframe.tail(self.startup_candle_count).copy()
+        # 原有指标计算（无需改动）
         dataframe['max_90'] = dataframe['high'].rolling(90).max()
         dataframe['min_90'] = dataframe['low'].rolling(90).min()
-
-        # 2. 当日涨跌幅
         dataframe['day_change'] = (dataframe['close'] - dataframe['open']) / dataframe['open']
-
-        # 3. 计算连续涨跌
         dataframe['is_green'] = (dataframe['close'] > dataframe['open']).astype(int)
         dataframe['is_red'] = (dataframe['close'] < dataframe['open']).astype(int)
+        dataframe['pattern'] = None
 
-        # 4. 计算90日图形指标
-        dataframe['pattern'] = None  # 初始化为None
-
-        # 从第90根开始计算图形指标
-        for i in range(90, len(dataframe)):
-            close_prices_90 = dataframe['close'].iloc[i - 89:i + 1].values  # 最近90根（包括当前）
+        df_len = len(dataframe)
+        logger.info(f"K线长度：{df_len}")
+        for i in range(90, df_len):
+            close_prices_90 = dataframe['close'].iloc[i - 89:i + 1].values
             try:
                 pattern = kline_1d_shape(close_prices_90)
-                dataframe.at[dataframe.index[i], 'pattern'] = str(pattern)  # 转为字符串存储
+                dataframe.at[dataframe.index[i], 'pattern'] = str(pattern)
             except Exception:
-                # logger.warning(f"计算图形指标失败 {dataframe.index[i]}")
                 dataframe.at[dataframe.index[i], 'pattern'] = '[]'
 
         return dataframe
@@ -282,6 +210,7 @@ class BTCFullPosition2_2(IStrategy):
         #     return dataframe
 
         conditions = []
+        dataframe['enter_long'] = 0
 
         # 条件1：从最高点跌25%，直接建仓
         pass_max_drop = (
@@ -400,19 +329,21 @@ class BTCFullPosition2_2(IStrategy):
                 'C1+C2:max90跌' + (drop_from_high * 100).round(1).astype(str) + '%+涨+反转'
         )
 
-        # ==================== 新增：每分钟强制填充当前蜡烛的买入信号 ====================
-        if len(dataframe) >= 2:
-            prev_entry = dataframe['enter_long'].iloc[-2]
-            if pd.notna(prev_entry):
-                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = int(prev_entry)
-                logger.info(
-                    f"[populate_entry_trend] 强制填充当前蜡烛信号: 使用前一根蜡烛的 enter_long = {int(prev_entry)}")
-            else:
-                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
-                logger.info("[populate_entry_trend] 前一根蜡烛无信号，当前蜡烛强制填充 enter_long = 0")
-        elif len(dataframe) == 1:
-            dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
-            logger.info("[populate_entry_trend] 数据不足，当前蜡烛强制填充 enter_long = 0")
+        # ==================== 新增：返回前打印所有行信号详情 ====================
+        logger.info("[populate_entry_trend] === 所有K线买入信号详情（共 {} 行）===".format(len(dataframe)))
+        logger.info("{:<4} {:<12} {:<10} {:<8} {:<20}".format("索引", "日期", "收盘价", "买入信号", "标签"))
+        logger.info("-" * 60)
+        # 只取最后5行（如果数据不足5行，就显示全部）
+        rows_to_print = dataframe.tail(5)
+        for idx, row in rows_to_print.iterrows():
+            date_str = row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else 'N/A'
+            close_price = row['close']
+            enter_signal = row.get('enter_long', 0)
+            enter_tag = row.get('enter_tag', '')
+            signal_text = "买入" if enter_signal == 1 else "-"
+            logger.info("{:<4} {:<12} {:<10.2f} {:<8} {:<20}".format(
+                idx, date_str, close_price, signal_text, enter_tag))
+        logger.info("[populate_entry_trend] 信号打印完毕\n")
 
         return dataframe
 
@@ -426,6 +357,7 @@ class BTCFullPosition2_2(IStrategy):
         #     if len(dataframe) > 0:
         #         dataframe.loc[dataframe.index[-1], 'exit_long'] = 1  # 最后一根K线强制卖出
         #     return dataframe
+        dataframe['exit_long'] = 0
 
         """
         平仓条件：
@@ -480,7 +412,8 @@ class BTCFullPosition2_2(IStrategy):
                             up_segments.append(pattern[j])
 
                     # 使用独立方法检测双顶
-                    if self.check_double_top(up_segments, price_a, "(情况1.1)"):
+                    if self.check_double_top(up_segments, price_a, self.double_top_higher_threshold.value,
+                                             self.double_top_lower_threshold.value, "(情况1.1)"):
                         dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                         continue
 
@@ -503,7 +436,8 @@ class BTCFullPosition2_2(IStrategy):
                             remaining_up_segments = up_segments[1:]
 
                             # 使用独立方法检测双顶
-                            if self.check_double_top(remaining_up_segments, price_a, "(情况1.2)"):
+                            if self.check_double_top(remaining_up_segments, price_a, self.double_top_higher_threshold.value,
+                                             self.double_top_lower_threshold.value, "(情况1.2)"):
                                 dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                                 continue
 
@@ -530,44 +464,21 @@ class BTCFullPosition2_2(IStrategy):
         dataframe.loc[continuous_drop_only, 'exit_tag'] = '连续跌+双顶'
         dataframe.loc[both_drop, 'exit_tag'] = '单日跌+连续跌+双顶'
 
-        # 当同时出现买入和卖出信号时，只保留卖出信号
-        # 这样可以避免在同一天同时执行买入和卖出操作
-        exit_signal_exists = dataframe['exit_long'] == 1
-        entry_signal_exists = dataframe['enter_long'] == 1
-
-        # 如果某根K线上同时有买入和卖出信号，则取消买入信号
-        conflict_mask = exit_signal_exists & entry_signal_exists
-        dataframe.loc[conflict_mask, 'enter_long'] = 0
-
-        # ==================== 新增：每分钟强制填充当前蜡烛的信号 ====================
-        # 目的：让 adjust_trade_position 每分钟都能读取到一个明确的 0 或 1，而不是 NaN
-        # 逻辑：用前一根已闭合蜡烛的信号填充当前未闭合蜡烛（最安全、最可靠）
-        if len(dataframe) >= 2:
-            # 前一根闭合蜡烛的 exit_long 值（一定是 0 或 1，或 NaN 如果太早）
-            prev_exit = dataframe['exit_long'].iloc[-2]
-            # 如果前一根有明确信号（0 或 1），则复制到当前行
-            if pd.notna(prev_exit):
-                dataframe.iloc[-1, dataframe.columns.get_loc('exit_long')] = int(prev_exit)
-                logger.info(
-                    f"[populate_exit_trend] 强制填充当前蜡烛信号: 使用前一根蜡烛的 exit_long = {int(prev_exit)}")
-            else:
-                # 如果前一根也无信号（极早期），默认填 0（不卖出）
-                dataframe.iloc[-1, dataframe.columns.get_loc('exit_long')] = 0
-                logger.info("[populate_exit_trend] 前一根蜡烛无信号，当前蜡烛强制填充 exit_long = 0")
-        elif len(dataframe) == 1:
-            # 只有一根蜡烛（启动初期），默认不卖出
-            dataframe.iloc[-1, dataframe.columns.get_loc('exit_long')] = 0
-            logger.info("[populate_exit_trend] 数据不足，只有一根蜡烛，当前蜡烛强制填充 exit_long = 0")
-
-        # 同理，也为 enter_long 做相同填充（防止买入信号也出现 NaN，影响冲突处理）
-        if len(dataframe) >= 2:
-            prev_entry = dataframe['enter_long'].iloc[-2]
-            if pd.notna(prev_entry):
-                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = int(prev_entry)
-            else:
-                dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
-        elif len(dataframe) == 1:
-            dataframe.iloc[-1, dataframe.columns.get_loc('enter_long')] = 0
+        # ==================== 新增：返回前打印所有行信号详情 ====================
+        logger.info("[populate_exit_trend] === 所有K线卖出信号详情（共 {} 行）===".format(len(dataframe)))
+        logger.info("{:<4} {:<12} {:<10} {:<8} {:<20}".format("索引", "日期", "收盘价", "卖出信号", "标签"))
+        logger.info("-" * 60)
+        # 只取最后5行（如果数据不足5行，就显示全部）
+        rows_to_print = dataframe.tail(5)
+        for idx, row in rows_to_print.iterrows():
+            date_str = row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else 'N/A'
+            close_price = row['close']
+            exit_signal = row.get('exit_long', 0)
+            exit_tag = row.get('exit_tag', '')
+            signal_text = "卖出" if exit_signal == 1 else "-"
+            logger.info("{:<4} {:<12} {:<10.2f} {:<8} {:<20}".format(
+                idx, date_str, close_price, signal_text, exit_tag))
+        logger.info("[populate_exit_trend] 信号打印完毕\n")
 
         return dataframe
 
@@ -582,25 +493,25 @@ class BTCFullPosition2_2(IStrategy):
         return dataframe
 
     # ==================== 新增：自定义初始下注金额（实现买入时用全部USDT） ====================
-    def custom_stake_amount(self, pair: str, current_time: datetime, current_rate: float,
-                            proposed_stake: float, min_stake: Optional[float], max_stake: float,
-                            leverage: float, entry_tag: Optional[str], side: str,
-                            **kwargs) -> float:
-        """
-        当 stake_amount = "unlimited" 时，此方法决定初始开仓金额。
-        返回一个极大值，让 Freqtrade 用掉几乎全部可用余额（受 tradable_balance_ratio=0.99 控制）。
-        """
-        logger.info(f"[custom_stake_amount] 执行开始: pair={pair}, current_time={current_time}, "
-                    f"current_rate={current_rate}, proposed_stake={proposed_stake}, "
-                    f"min_stake={min_stake}, max_stake={max_stake}, leverage={leverage}, "
-                    f"entry_tag={entry_tag}, side={side}")
-
-        # 计算返回值（足够大即可，确保取 max_stake）
-        return_value = max_stake * 10
-        logger.info(f"[custom_stake_amount] 计算返回值: return_value={return_value} (基于 max_stake={max_stake})")
-
-        logger.info("[custom_stake_amount] 执行结束")
-        return return_value
+    # def custom_stake_amount(self, pair: str, current_time: datetime, current_rate: float,
+    #                         proposed_stake: float, min_stake: Optional[float], max_stake: float,
+    #                         leverage: float, entry_tag: Optional[str], side: str,
+    #                         **kwargs) -> float:
+    #     """
+    #     当 stake_amount = "unlimited" 时，此方法决定初始开仓金额。
+    #     返回一个极大值，让 Freqtrade 用掉几乎全部可用余额（受 tradable_balance_ratio=0.99 控制）。
+    #     """
+    #     logger.info(f"[custom_stake_amount] 执行开始: pair={pair}, current_time={current_time}, "
+    #                 f"current_rate={current_rate}, proposed_stake={proposed_stake}, "
+    #                 f"min_stake={min_stake}, max_stake={max_stake}, leverage={leverage}, "
+    #                 f"entry_tag={entry_tag}, side={side}")
+    #
+    #     # 计算返回值（足够大即可，确保取 max_stake）
+    #     return_value = max_stake * 10
+    #     logger.info(f"[custom_stake_amount] 计算返回值: return_value={return_value} (基于 max_stake={max_stake})")
+    #
+    #     logger.info("[custom_stake_amount] 执行结束")
+    #     return return_value
 
     # ==================== 新增：动态仓位调整（实现卖出时全卖，包括预存量BTC） ====================
     def adjust_trade_position(self, trade: Trade, current_time: datetime,
@@ -610,99 +521,54 @@ class BTCFullPosition2_2(IStrategy):
                               current_entry_profit: float, current_exit_profit: float,
                               **kwargs) -> Optional[float]:
 
-        logger.info(f"[adjust_trade_position] 执行开始: trade_id={trade.id}, pair={trade.pair}, "
-                    f"current_time={current_time}, current_rate={current_rate}, "
-                    f"current_profit={current_profit:.6f}, min_stake={min_stake}, max_stake={max_stake}, "
-                    f"current_entry_rate={current_entry_rate}, current_exit_rate={current_exit_rate}, "
-                    f"current_entry_profit={current_entry_profit:.6f}, current_exit_profit={current_exit_profit:.6f}")
+        coin, quote = trade.pair.split('/')  # e.g., 'BTC/USDT' → coin='BTC', quote='USDT'
 
-        # 检查是否有挂单（如有挂单则不进行仓位调整）
-        if trade.has_open_orders:
-            logger.info("[adjust_trade_position] 有挂单存在，不进行调整，返回 None")
-            logger.info("[adjust_trade_position] 执行结束")
-            return None
+        # 获取钱包余额
+        total_coin_balance = self.wallets.get_total(coin)  # 该币总持有量（包括尘埃）
+        free_quote_balance = self.wallets.get_free(quote)  # 可用稳定币余额（可用于买入）
 
-        # 获取币种（如 BTC）
-        coin = trade.pair.split('/')[0]
-        logger.info(f"[adjust_trade_position] 币种: coin={coin}")
-
-        # 获取账户中该币种的总持仓量（包括预存的dust）
-        total_coin_balance = self.wallets.get_total(coin)
-        logger.info(f"[adjust_trade_position] 账户总持仓量: total_coin_balance={total_coin_balance}")
-
-        # 当前Trade管理的持仓量
-        logger.info(f"[adjust_trade_position] 机器人管理持仓量: trade.amount={trade.amount}")
-
-        # ========== 安全获取 analyzed dataframe ==========
+        # 获取最新信号
         dataframe, _ = self.dp.get_analyzed_dataframe(trade.pair, self.timeframe)
+        last_row = dataframe.iloc[-1]
 
-        if dataframe is None:
-            logger.warning("[adjust_trade_position] get_analyzed_dataframe 返回 None，无法检查信号，返回 None")
-            logger.info("[adjust_trade_position] 执行结束")
+        logger.info(f"[adjust_trade_position] 时间:{current_time}, 交易对:{trade.pair}, "
+                    f"钱包{coin}:{total_coin_balance:.8f}, 机器人持仓:{trade.amount:.8f}, "
+                    f"可用{quote}:{free_quote_balance:.2f}, 当前价:{current_rate}, "
+                    f"最新K线:{last_row['date']}, enter_long:{last_row.get('enter_long', 0)}, "
+                    f"exit_long:{last_row.get('exit_long', 0)}")
+
+        # 关键安全检查：有未成交订单时不调整，避免频繁取消/重下单
+        if trade.has_open_orders:
+            logger.info("[adjust_trade_position] 存在挂单，跳过本次调整")
             return None
 
-        if dataframe.empty or len(dataframe) < 2:
-            logger.warning(f"[adjust_trade_position] dataframe 为空或数据不足 (len={len(dataframe)}), "
-                           f"无法获取前一根K线信号，返回 None")
-            logger.info("[adjust_trade_position] 执行结束")
-            return None
-        # ========== 安全获取结束 ==========
-
-        # <<< 关键日志：每分钟打印前一根已完成日K线（策略实际决策依据） >>>
-        prev_candle = dataframe.iloc[-2]  # 前一根已完成的日K线
-        prev_date = dataframe.index[-2]
-
-        prev_open = prev_candle['open']
-        prev_high = prev_candle['high']
-        prev_low = prev_candle['low']
-        prev_close = prev_candle['close']
-        prev_volume = prev_candle['volume']
-        prev_entry_signal = prev_candle.get('enter_long', 'N/A')
-        prev_exit_signal = prev_candle.get('exit_long', 'N/A')
-
-        logger.info(f"[KEY_LOG] 本次adjust_trade_position分析的前一根已完成日K线日期: {prev_date.date()} "
-                    f"(UTC时间: {prev_date})")
-        logger.info(f"[KEY_LOG] 前一根K线详情: O={prev_open:.2f} H={prev_high:.2f} "
-                    f"L={prev_low:.2f} C={prev_close:.2f} V={prev_volume:.0f} | "
-                    f"enter_long={prev_entry_signal} exit_long={prev_exit_signal}")
-
-        # 当前正在形成的K线（仅供参考）
-        current_date = dataframe.index[-1]
-        logger.info(f"[KEY_LOG] 当前正在形成的日K线日期: {current_date.date()} (UTC时间: {current_date})")
-        # <<< 关键日志结束 >>>
-
-        # 使用当前蜡烛（已强制填充前一根信号）的exit_long判断是否卖出
-        last_candle = dataframe.iloc[-1]
-        exit_long = last_candle.get('exit_long', 0)
-        logger.info(f"[adjust_trade_position] 当前蜡烛填充后的卖出信号: exit_long={exit_long}")
-
-        if exit_long == 1:
-            logger.info("[adjust_trade_position] 检测到卖出信号，开始计算全卖逻辑")
-
-            # 计算额外存量（预存的BTC）
-            extra_amount = total_coin_balance - trade.amount
-            logger.info(f"[adjust_trade_position] 额外存量（预存部分）: extra_amount={extra_amount}")
-
-            if extra_amount > 0:
-                # 计算额外部分的价值
-                extra_stake = extra_amount * current_rate
-                logger.info(f"[adjust_trade_position] 额外 stake 价值: extra_stake={extra_stake} "
-                            f"(基于 current_rate={current_rate})")
-
-                # 返回负值表示减仓（全卖 + 额外存量，留0.1%缓冲避免精度问题）
-                return_value = - (trade.stake_amount + extra_stake * 0.999)
-                logger.info(f"[adjust_trade_position] 计算返回值: return_value={return_value} "
-                            f"(标签: full_sell_including_dust)")
-                logger.info("[adjust_trade_position] 执行结束")
-                return return_value, "full_sell_including_dust"
+        # 1. 卖出信号：全仓平仓（包括钱包中多余的尘埃币）
+        if last_row.get('exit_long', 0) == 1:
+            extra_coin = total_coin_balance - trade.amount  # 钱包中多出的尘埃币
+            if extra_coin > 0:
+                # 卖出机器人所有仓位 + 尘埃币（留0.1%手续费余地）
+                sell_stake = (trade.amount + extra_coin) * current_rate * 0.99
+                logger.info(f"[adjust_trade_position] 全卖 + 尘埃 ({extra_coin:.8f} {coin})，返回 -{sell_stake:.2f}")
+                return -sell_stake
+            elif trade.stake_amount > 0:
+                # 只卖机器人持仓
+                logger.info(f"[adjust_trade_position] 全卖机器人持仓，返回 -{trade.stake_amount:.2f}")
+                return -trade.stake_amount
             else:
-                # 无额外存量，直接全卖当前仓位
-                return_value = -trade.stake_amount
-                logger.info(f"[adjust_trade_position] 无额外存量，计算返回值: return_value={return_value} "
-                            f"(标签: full_sell_normal)")
-                logger.info("[adjust_trade_position] 执行结束")
-                return return_value, "full_sell_normal"
+                logger.info(f"[adjust_trade_position] 全卖无持仓-{trade.stake_amount:.2f}")
 
-        logger.info("[adjust_trade_position] 无卖出信号或条件不满足，返回 None")
-        logger.info("[adjust_trade_position] 执行结束")
+        # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入）
+        elif last_row.get('enter_long', 0) == 1:
+            if free_quote_balance > min_stake:  # 有足够资金才加仓
+                # 用掉几乎所有可用稳定币（留一点防滑点/手续费）
+                add_stake = free_quote_balance * 0.999
+                logger.info(
+                    f"[adjust_trade_position] 全仓加仓，可用{quote}:{free_quote_balance:.2f}，返回 +{add_stake:.2f}")
+                return add_stake
+            else:
+                logger.info(f"[adjust_trade_position] 买入信号但可用资金不足{min_stake}，跳过加仓")
+                return None
+
+        # 3. 无信号：不操作
+        logger.info("[adjust_trade_position] 无明确进出信号，返回 None")
         return None
