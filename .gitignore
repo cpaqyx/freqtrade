@@ -1,10 +1,13 @@
 # Freqtrade 核心运行时生成的文件
-tradesv3.sqlite          # 交易数据库（实盘/干跑历史记录）
-tradesv3.dryrun.sqlite   # 干跑模式数据库
-tradesv3.*.sqlite        # 所有变体数据库
-user_data/hyperopt_results/*.pkl
-user_data/hyperopt_results/*.html
-user_data/hyperopt_results/*.csv
+tradesv3.sqlite          # 主交易数据库
+tradesv3.sqlite-shm      # SQLite WAL 模式共享内存文件
+tradesv3.sqlite-wal      # SQLite WAL 模式预写日志文件
+tradesv3.dryrun.sqlite
+tradesv3.dryrun.sqlite-shm
+tradesv3.dryrun.sqlite-wal
+tradesv3.*.sqlite
+tradesv3.*.sqlite-shm
+tradesv3.*.sqlite-wal
 
 # 日志文件
 *.log
@@ -60,3 +63,6 @@ docker-compose.override.yml
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+*.sqlite-wal
+*.sqlite-shm
