@@ -9,20 +9,14 @@ from pandas import DataFrame
 from datetime import datetime
 from typing import Optional
 import logging
-import sys
-import os
-
 from freqtrade.persistence import Trade
 
 # 导入图形分析模块
-sys.path.insert(0, os.path.join(os.getcwd(), 'user_data', 'common'))
 try:
-    from user_data.common.line_format_v2 import kline_1d_shape
+    from user_data.common.line_format_v2 import kline_1d_shape, check_double_top
 except ImportError:
-    from line_format_v2 import kline_1d_shape
-
+    from line_format_v2 import kline_1d_shape, check_double_top
 from freqtrade.strategy import IStrategy, DecimalParameter
-
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +53,7 @@ class BTCFullPosition2_1(IStrategy):
 
 
     # 仓位调整：禁用加仓/减仓功能，仅全仓进出
-    # position_adjustment_enable = False
+    position_adjustment_enable = True
 
     # 只在新K线时执行策略（推荐设置，避免同一K线反复执行导致信号不稳定）
     # process_only_new_candles = True
@@ -412,7 +406,7 @@ class BTCFullPosition2_1(IStrategy):
                             up_segments.append(pattern[j])
 
                     # 使用独立方法检测双顶
-                    if self.check_double_top(up_segments, price_a, self.double_top_higher_threshold.value,
+                    if check_double_top(up_segments, price_a, self.double_top_higher_threshold.value,
                                              self.double_top_lower_threshold.value, "(情况1.1)"):
                         dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                         continue
@@ -436,7 +430,7 @@ class BTCFullPosition2_1(IStrategy):
                             remaining_up_segments = up_segments[1:]
 
                             # 使用独立方法检测双顶
-                            if self.check_double_top(remaining_up_segments, price_a, self.double_top_higher_threshold.value,
+                            if check_double_top(remaining_up_segments, price_a, self.double_top_higher_threshold.value,
                                              self.double_top_lower_threshold.value, "(情况1.2)"):
                                 dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                                 continue
@@ -446,7 +440,7 @@ class BTCFullPosition2_1(IStrategy):
                 # logger.warning(f"解析图形指标失败 {dataframe.index[i]}")
 
         # 最终平仓条件
-        dataframe.loc[drop_condition & dataframe['pattern_exit_signal'], 'exit_long'] = 1
+        dataframe.loc[drop_condition & dataframe['pattern_exit_signal'], ['exit_long', 'enter_long']] = (1, 0)
 
         # 添加条件状态说明字段（用于UI查看）
         dataframe['exit_tag'] = ''

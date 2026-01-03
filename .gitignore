@@ -1,0 +1,62 @@
+# Freqtrade 核心运行时生成的文件
+tradesv3.sqlite          # 交易数据库（实盘/干跑历史记录）
+tradesv3.dryrun.sqlite   # 干跑模式数据库
+tradesv3.*.sqlite        # 所有变体数据库
+user_data/hyperopt_results/*.pkl
+user_data/hyperopt_results/*.html
+user_data/hyperopt_results/*.csv
+
+# 日志文件
+*.log
+user_data/log/
+logs/
+
+# 回测和优化缓存/结果
+user_data/backtest_results/
+user_data/plot/
+plot/*.html
+plot/*.png
+hyperopt.html
+
+# 测试数据和测试结果（你特别提到的）
+tests/
+test_data/
+user_data/data/*         # 下载的K线历史数据（体积大，不建议上传）
+user_data/backtest-data/ # 回测专用数据
+backtest-data/
+
+# 虚拟环境和Python缓存
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 编辑器/IDE 配置
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store                # macOS
+Thumbs.db                # Windows
+
+# Freqtrade 配置中可能包含敏感信息的文件（建议不要上传）
+config_private.json
+user_data/config_private.json
+
+# 其他临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
+# Docker（如果你用Docker运行）
+.docker/
+docker-compose.override.yml
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/

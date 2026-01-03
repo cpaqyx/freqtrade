@@ -80,7 +80,7 @@
   
   "strategy": "BTCFullPosition",
   "strategy_path": "user_data/btc",
-  "db_url": "sqlite:///tradesv3_btc_fullposition.sqlite",
+  "db_url": "sqlite:///tradesv3_btc_account1.sqlite",
   "user_data_dir": "user_data",
   "data_dir": "user_data/data",
   
