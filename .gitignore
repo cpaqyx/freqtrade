@@ -14,6 +14,10 @@ tradesv3.*.sqlite-wal
 user_data/log/
 logs/
 
+# Hyperopt 结果文件夹 - 忽略全部内容（最彻底的方式）
+user_data/hyperopt_results/
+user_data/hyperopt_results/*      # 确保所有子文件和子文件夹都被忽略
+
 # 回测和优化缓存/结果
 user_data/backtest_results/
 user_data/plot/
