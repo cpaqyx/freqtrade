@@ -19,55 +19,55 @@ echo 注意: 使用 --erase 参数将删除现有数据并重新下载完整数�
 echo.
 
 REM 切换到freqtrade根目录
-cd /d "E:\git\freqtrade\freqtrade"
+cd /d "C:\work\freqtrade\freqtrade"
 
-echo [1/6] 下载1分钟数据（365天 = 1年）...
-echo 警告: 1分钟数据量极大，单币种约52万根K线，9个币种约470万根K线
-echo 建议: 如不需要超高频策略，可跳过此步骤（按Ctrl+C中断）
-echo 等待5秒后开始下载...
-timeout /t 5 /nobreak
-python freqtrade/main.py download-data ^
-  -c user_data/common/spot.json ^
-  --timeframe 1m ^
-  --days 365 ^
-  --trading-mode spot ^
-  --erase
-
-echo.
-echo [2/6] 下载5分钟数据（500天）...
-python freqtrade/main.py download-data ^
-  -c user_data/common/spot.json ^
-  --timeframe 5m ^
-  --days 500 ^
-  --trading-mode spot ^
-  --erase
-
-echo.
-echo [3/6] 下载15分钟数据（730天 = 2年）...
-python freqtrade/main.py download-data ^
-  -c user_data/common/spot.json ^
-  --timeframe 15m ^
-  --days 730 ^
-  --trading-mode spot ^
-  --erase
-
-echo.
-echo [4/6] 下载1小时数据（1095天 = 3年）...
-python freqtrade/main.py download-data ^
-  -c user_data/common/spot.json ^
-  --timeframe 1h ^
-  --days 1095 ^
-  --trading-mode spot ^
-  --erase
-
-echo.
-echo [5/6] 下载4小时数据（1825天 = 5年）...
-python freqtrade/main.py download-data ^
-  -c user_data/common/spot.json ^
-  --timeframe 4h ^
-  --days 1825 ^
-  --trading-mode spot ^
-  --erase
+@REM echo [1/6] 下载1分钟数据（365天 = 1年）...
+@REM echo 警告: 1分钟数据量极大，单币种约52万根K线，9个币种约470万根K线
+@REM echo 建议: 如不需要超高频策略，可跳过此步骤（按Ctrl+C中断）
+@REM echo 等待5秒后开始下载...
+@REM timeout /t 5 /nobreak
+@REM python freqtrade/main.py download-data ^
+@REM   -c user_data/common/spot.json ^
+@REM   --timeframe 1m ^
+@REM   --days 365 ^
+@REM   --trading-mode spot ^
+@REM   --erase
+@REM
+@REM echo.
+@REM echo [2/6] 下载5分钟数据（500天）...
+@REM python freqtrade/main.py download-data ^
+@REM   -c user_data/common/spot.json ^
+@REM   --timeframe 5m ^
+@REM   --days 500 ^
+@REM   --trading-mode spot ^
+@REM   --erase
+@REM
+@REM echo.
+@REM echo [3/6] 下载15分钟数据（730天 = 2年）...
+@REM python freqtrade/main.py download-data ^
+@REM   -c user_data/common/spot.json ^
+@REM   --timeframe 15m ^
+@REM   --days 730 ^
+@REM   --trading-mode spot ^
+@REM   --erase
+@REM
+@REM echo.
+@REM echo [4/6] 下载1小时数据（1095天 = 3年）...
+@REM python freqtrade/main.py download-data ^
+@REM   -c user_data/common/spot.json ^
+@REM   --timeframe 1h ^
+@REM   --days 1095 ^
+@REM   --trading-mode spot ^
+@REM   --erase
+@REM
+@REM echo.
+@REM echo [5/6] 下载4小时数据（1825天 = 5年）...
+@REM python freqtrade/main.py download-data ^
+@REM   -c user_data/common/spot.json ^
+@REM   --timeframe 4h ^
+@REM   --days 1825 ^
+@REM   --trading-mode spot ^
+@REM   --erase
 
 echo.
 echo [6/6] 下载日线数据（2500天 = 约7年）...

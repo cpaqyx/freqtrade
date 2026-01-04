@@ -13,7 +13,7 @@ echo 注意: 使用 --erase 参数将删除现有数据并重新下载完整数�
 echo.
 
 REM 切换到freqtrade根目录
-cd /d "E:\git\freqtrade\freqtrade"
+cd /d "C:\work\freqtrade\freqtrade"
 
 echo 下载5分钟数据（500天）...
 python freqtrade/main.py download-data ^

@@ -25,7 +25,7 @@ echo 是否继续? 将在10秒后自动开始...
 timeout /t 10 /nobreak
 
 REM 切换到freqtrade根目录
-cd /d "E:\git\freqtrade\freqtrade"
+cd /d "C:\work\freqtrade\freqtrade"
 
 echo 开始下载1分钟数据（365天）...
 python freqtrade/main.py download-data ^
