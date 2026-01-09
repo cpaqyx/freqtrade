@@ -1,6 +1,9 @@
 """
-BTC全仓策略 - 基于90日图形分析
-只做多，不做空，全仓进出
+策略特点：
+（1）仅适用于btc;
+（2）全仓操作，并且会使用非管理的资金，即录有卖出操作时，存量的btc也会被卖掉
+（3）每分钟都会执行一次populate_indicators、populate_entry_trend、populate_exit_trend、bot_loop_start，确保可靠
+（4）为了保证交易，会在买入时提高价格，卖出时降低价格的0.5%，基本等同于市价成交
 """
 
 import numpy as np
@@ -540,12 +543,12 @@ class BTCFullPosition2_1(IStrategy):
     # ==================== 新增：自定义买入价格（当前价 +1%） ====================
     def custom_entry_price(self, pair: str, current_time: datetime, proposed_rate: float,
                            entry_tag: Optional[str], side: str, **kwargs) -> float:
-        return proposed_rate * 1.01
+        return proposed_rate * 1.005
 
     # ==================== 新增：自定义卖出价格（当前价 -1%） ====================
     def custom_exit_price(self, pair: str, current_time: datetime, proposed_rate: float,
                           exit_tag: Optional[str], side: str, **kwargs) -> float:
-        return proposed_rate * 0.99
+        return proposed_rate * 0.995
 
     # ==================== 新增：每分钟检查信号并处理无交易时的订单 ====================
     def bot_loop_start(self, **kwargs) -> None:
@@ -582,7 +585,7 @@ class BTCFullPosition2_1(IStrategy):
             if total_coin_balance < 0.00001:
                 logger.info(f"{coin} 可用于交易的数量为：{total_coin_balance}, 小于最小可买卖单位，本次忽略")
                 return
-            sell_price = current_rate * 0.99
+            sell_price = current_rate * 0.995
             amount = total_coin_balance * 0.99  # 留一点防尘埃
             # 安全获取 exchange 实例
             try:
@@ -629,7 +632,7 @@ class BTCFullPosition2_1(IStrategy):
                 logger.info(f"{quote} 可用余额为：{free_quote_balance:.2f}, 小于最小订单价值 {min_stake} USDT，本次忽略")
                 return
 
-            buy_price = current_rate * 1.01
+            buy_price = current_rate * 1.005
             # 使用几乎全部可用余额，但留 0.1% 防尘埃/手续费
             amount = (free_quote_balance * 0.999) / buy_price
 

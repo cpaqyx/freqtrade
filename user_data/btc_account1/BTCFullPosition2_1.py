@@ -1,6 +1,9 @@
 """
-BTC全仓策略 - 基于90日图形分析
-只做多，不做空，全仓进出
+（1）适用于btc等不同币种;
+（2）全仓操作，独立的资金，但首次买入时会有冲突
+（3）每分钟都会执行一次populate_indicators、populate_entry_trend、populate_exit_trend、bot_loop_start，确保可靠
+（4）为了保证交易，会在买入时提高价格，卖出时降低价格的0.5%，基本等同于市价成交
+（5）持久化信息到json文件，确保可靠执行
 """
 
 import numpy as np
@@ -10,13 +13,16 @@ from datetime import datetime
 from typing import Optional
 import logging
 from freqtrade.persistence import Trade
-
+import os
+import json
+from datetime import datetime, timedelta
 # 导入图形分析模块
 try:
     from user_data.common.line_format_v2 import kline_1d_shape, check_double_top
 except ImportError:
     from line_format_v2 import kline_1d_shape, check_double_top
 from freqtrade.strategy import IStrategy, DecimalParameter
+import ast  # 新增：用于安全解析 pattern_str
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +37,7 @@ class BTCFullPosition2_1(IStrategy):
     # 启动所需K线数量：至少需要90根历史K线才能计算指标,多出90根的则是计算前一段时间的信号，方便查看, 以配置文件中的为准
     startup_candle_count: int = 150
 
-    # 保持默认行为：只有新K线时才完整执行策略函数（每天执行一次）
+    # 只在新K线时执行策略（推荐设置，避免同一K线反复执行导致信号不稳定）
     process_only_new_candles = False
 
     # ==================== 测试模式开关 ====================
@@ -51,12 +57,8 @@ class BTCFullPosition2_1(IStrategy):
     # 是否允许做空：仅做多，不做空
     can_short = False
 
-
     # 仓位调整：禁用加仓/减仓功能，仅全仓进出
-    position_adjustment_enable = True
-
-    # 只在新K线时执行策略（推荐设置，避免同一K线反复执行导致信号不稳定）
-    # process_only_new_candles = True
+    position_adjustment_enable = False  # 修复：设为 False，因为策略不支持加减仓
 
     # ==================== ROI 和止损配置 ====================
 
@@ -165,6 +167,12 @@ class BTCFullPosition2_1(IStrategy):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         # logger.info("[OK] BTC全仓策略已初始化")
+
+        # === 新增：信号持久化文件路径（将在 bot_loop_start 中动态处理） ===
+        self.last_signal = {}  # 按 pair 存储信号
+        self.min_amounts = {}  # 存储每个 pair 的最小 amount
+        self.min_notional = {}  # 存储每个 pair 的最小订单价值
+        self.min_amounts_loaded = False  # 标志是否已加载
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         print("populate_indicators执行")
@@ -289,8 +297,7 @@ class BTCFullPosition2_1(IStrategy):
                                         continue
 
             except Exception:
-                pass
-                # logger.warning(f"解析图形指标失败 {dataframe.index[i]}")
+                logger.warning(f"解析图形指标失败 {dataframe.index[i]}")
 
         condition_2 = rise_condition & dataframe['pattern_entry_signal']
 
@@ -338,6 +345,28 @@ class BTCFullPosition2_1(IStrategy):
             logger.info("{:<4} {:<12} {:<10.2f} {:<8} {:<20}".format(
                 idx, date_str, close_price, signal_text, enter_tag))
         logger.info("[populate_entry_trend] 信号打印完毕\n")
+
+        # === 新增：如果最后一行有买入信号，持久化到文件 ===
+        if len(dataframe) > 0 and dataframe['enter_long'].iloc[-1] == 1:
+            pair = metadata.get('pair')  # 从 metadata 获取 pair
+            if pair:
+                signal_file = f'user_data/signal_{pair.replace("/", "_")}.json'  # 修复：按 pair 独立文件
+                last_date = dataframe['date'].iloc[-1].strftime('%Y-%m-%d') if pd.notna(
+                    dataframe['date'].iloc[-1]) else 'N/A'
+                last_close = dataframe['close'].iloc[-1]
+                signal_data = {
+                    'type': 'entry',
+                    'date': last_date,
+                    'price': last_close,
+                    'executed': False
+                }
+                try:
+                    with open(signal_file, 'w') as f:
+                        json.dump(signal_data, f)
+                    self.last_signal[pair] = signal_data  # 按 pair 存储
+                    logger.info(f"持久化买入信号 ({pair}): {signal_data}")
+                except Exception as e:
+                    logger.error(f"持久化买入信号失败 ({pair}): {e}")
 
         return dataframe
 
@@ -407,7 +436,7 @@ class BTCFullPosition2_1(IStrategy):
 
                     # 使用独立方法检测双顶
                     if check_double_top(up_segments, price_a, self.double_top_higher_threshold.value,
-                                             self.double_top_lower_threshold.value, "(情况1.1)"):
+                                        self.double_top_lower_threshold.value, "(情况1.1)"):
                         dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                         continue
 
@@ -431,13 +460,12 @@ class BTCFullPosition2_1(IStrategy):
 
                             # 使用独立方法检测双顶
                             if check_double_top(remaining_up_segments, price_a, self.double_top_higher_threshold.value,
-                                             self.double_top_lower_threshold.value, "(情况1.2)"):
+                                                self.double_top_lower_threshold.value, "(情况1.2)"):
                                 dataframe.at[dataframe.index[i], 'pattern_exit_signal'] = True
                                 continue
 
             except Exception:
-                pass
-                # logger.warning(f"解析图形指标失败 {dataframe.index[i]}")
+                logger.warning(f"解析图形指标失败 {dataframe.index[i]}")
 
         # 最终平仓条件
         dataframe.loc[drop_condition & dataframe['pattern_exit_signal'], ['exit_long', 'enter_long']] = (1, 0)
@@ -474,200 +502,199 @@ class BTCFullPosition2_1(IStrategy):
                 idx, date_str, close_price, signal_text, exit_tag))
         logger.info("[populate_exit_trend] 信号打印完毕\n")
 
+        # === 新增：如果最后一行有卖出信号，持久化到文件 ===
+        if len(dataframe) > 0 and dataframe['exit_long'].iloc[-1] == 1:
+            pair = metadata.get('pair')
+            if pair:
+                signal_file = f'user_data/signal_{pair.replace("/", "_")}.json'  # 修复：按 pair 独立文件
+                last_date = dataframe['date'].iloc[-1].strftime('%Y-%m-%d') if pd.notna(
+                    dataframe['date'].iloc[-1]) else 'N/A'
+                last_close = dataframe['close'].iloc[-1]
+                signal_data = {
+                    'type': 'exit',
+                    'date': last_date,
+                    'price': last_close,
+                    'executed': False
+                }
+                try:
+                    with open(signal_file, 'w') as f:
+                        json.dump(signal_data, f)
+                    self.last_signal[pair] = signal_data
+                    logger.info(f"持久化卖出信号 ({pair}): {signal_data}")
+                except Exception as e:
+                    logger.error(f"持久化卖出信号失败 ({pair}): {e}")
+
         return dataframe
 
-    # ==================== 新增：动态仓位调整（实现卖出时全卖，包括预存量BTC） ====================
-    def adjust_trade_position(self, trade: Trade, current_time: datetime,
-                              current_rate: float, current_profit: float,
-                              min_stake: Optional[float], max_stake: float,
-                              current_entry_rate: float, current_exit_rate: float,
-                              current_entry_profit: float, current_exit_profit: float,
-                              **kwargs) -> Optional[float]:
-
-        coin, quote = trade.pair.split('/')  # e.g., 'BTC/USDT' → coin='BTC', quote='USDT'
-
-        # 获取钱包余额
-        total_coin_balance = self.wallets.get_total(coin)  # 该币总持有量（包括尘埃）
-        free_quote_balance = self.wallets.get_free(quote)  # 可用稳定币余额（可用于买入）
-
-        # 获取最新信号
-        dataframe, _ = self.dp.get_analyzed_dataframe(trade.pair, self.timeframe)
-        last_row = dataframe.iloc[-1]
-
-        logger.info(f"[adjust_trade_position] 时间:{current_time}, 交易对:{trade.pair}, "
-                    f"钱包{coin}:{total_coin_balance:.8f}, 机器人持仓:{trade.amount:.8f}, "
-                    f"可用{quote}:{free_quote_balance:.2f}, 当前价:{current_rate}, "
-                    f"最新K线:{last_row['date']}, enter_long:{last_row.get('enter_long', 0)}, "
-                    f"exit_long:{last_row.get('exit_long', 0)}")
-
-        # 修改后的挂单检查：仅对买入信号应用检查，对卖出信号允许继续执行全卖（忽略挂单）
-        if trade.has_open_orders:
-            if last_row.get('exit_long', 0) == 1:
-                logger.info("[adjust_trade_position] 存在挂单，但卖出信号，继续全卖")
-            else:
-                logger.info("[adjust_trade_position] 存在挂单，跳过本次调整")
-                return None
-
-        # 1. 卖出信号：全仓平仓（包括钱包中多余的尘埃币），持续尝试直到卖完
-        if last_row.get('exit_long', 0) == 1:
-            # 计算总需卖出量（机器人持仓 + 尘埃）
-            total_to_sell = total_coin_balance
-            if total_to_sell > 0:
-                # 卖出全部（留0.1%手续费余地）
-                sell_stake = total_to_sell * current_rate * 0.99
-                logger.info(f"[adjust_trade_position] 全卖全部仓位 ({total_to_sell:.8f} {coin})，返回 -{sell_stake:.2f}")
-                return -sell_stake
-            else:
-                logger.info("[adjust_trade_position] 无仓位可卖，返回 None")
-                return None
-
-        # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入），持续尝试直到买完可用资金
-        elif last_row.get('enter_long', 0) == 1:
-            if free_quote_balance > min_stake:  # 有足够资金才加仓
-                # 用掉几乎所有可用稳定币（留一点防滑点/手续费）
-                add_stake = free_quote_balance * 0.999
-                logger.info(
-                    f"[adjust_trade_position] 全仓加仓，可用{quote}:{free_quote_balance:.2f}，返回 +{add_stake:.2f}")
-                return add_stake
-            else:
-                logger.info(f"[adjust_trade_position] 买入信号但可用资金不足{min_stake}，跳过加仓")
-                return None
-
-        # 3. 无信号：不操作
-        logger.info("[adjust_trade_position] 无明确进出信号，返回 None")
-        return None
-
-    # ==================== 新增：自定义买入价格（当前价 +1%） ====================
-    def custom_entry_price(self, pair: str, current_time: datetime, proposed_rate: float,
-                           entry_tag: Optional[str], side: str, **kwargs) -> float:
-        return proposed_rate * 1.01
-
-    # ==================== 新增：自定义卖出价格（当前价 -1%） ====================
-    def custom_exit_price(self, pair: str, current_time: datetime, proposed_rate: float,
-                          exit_tag: Optional[str], side: str, **kwargs) -> float:
-        return proposed_rate * 0.99
-
-    # ==================== 新增：每分钟检查信号并处理无交易时的订单 ====================
     def bot_loop_start(self, **kwargs) -> None:
-        logger.info("执行检查信号并处理无交易时的订单")
-        pair = 'BTC/USDT'
-        coin = 'BTC'
-        quote = 'USDT'
-        total_coin_balance = self.wallets.get_total(coin)
-        free_quote_balance = self.wallets.get_free(quote)
-        # 假设最小下单金额，从配置中获取或硬编码
-        min_stake = self.config.get('stake_min', 5.0)  # 如果配置中无，默认为5 USDT
-
-        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        if len(dataframe) == 0:
+        """
+        每分钟执行一次，用于强制挂单（限价单）和处理历史未执行信号
+        支持多交易对，使用 config 中的 pair_whitelist 获取交易对
+        """
+        # ==================== 从 config 获取当前白名单交易对 ====================
+        pair_whitelist = self.config.get('exchange', {}).get('pair_whitelist', [])
+        if not pair_whitelist:
+            logger.warning("config 中未配置 pair_whitelist，白名单为空，无法执行 bot_loop_start")
             return
 
-        last_row = dataframe.iloc[-1]
+        logger.debug(f"[bot_loop_start] 当前白名单交易对数量: {len(pair_whitelist)} - {pair_whitelist}")
 
-        # 获取当前实时价格
-        try:
-            ticker = self.dp.ticker(pair)
-            current_rate = ticker['last']
-        except Exception as e:
-            logger.error(f"Failed to get current rate: {e}")
-            return
+        # ==================== 延迟加载市场限制（仅第一次执行时加载） ====================
+        if not getattr(self, 'min_amounts_loaded', False):
+            self.min_amounts = {}
+            self.min_notional = {}
+            try:
+                markets = self.dp.exchange.markets
+                for p, info in markets.items():
+                    if 'limits' in info:
+                        if 'amount' in info['limits'] and 'min' in info['limits']['amount']:
+                            self.min_amounts[p] = info['limits']['amount']['min']
+                        if 'cost' in info['limits'] and 'min' in info['limits']['cost']:
+                            self.min_notional[p] = info['limits']['cost']['min']
+                logger.info(f"预加载市场限制完成，共 {len(self.min_amounts)} 个交易对")
+            except Exception as e:
+                logger.warning(f"预加载市场限制失败，使用默认值: {e}")
+            self.min_amounts_loaded = True
 
-        # 检查开放交易
-        open_trades = Trade.get_trades_proxy(is_open=True)
-        has_open_trade = any(t.pair == pair for t in open_trades)
+        # ==================== 对每个白名单交易对逐个处理 ====================
+        for pair in pair_whitelist:
+            try:
+                coin, quote = pair.split('/')
+            except Exception as e:
+                logger.error(f"解析交易对失败: {pair} - {e}")
+                continue
 
-        # 卖出信号：如果有信号且有持仓且无开放交易，直接挂限价卖单
-        if last_row.get('exit_long', 0) == 1 and total_coin_balance > 0 and not has_open_trade:
-            logger.info("处理卖出信号")
-            if total_coin_balance < 0.00001:
-                logger.info(f"{coin} 可用于交易的数量为：{total_coin_balance}, 小于最小可买卖单位，本次忽略")
-                return
-            sell_price = current_rate * 0.99
-            amount = total_coin_balance * 0.99  # 留一点防尘埃
-            # 安全获取 exchange 实例
+            logger.debug(f"[bot_loop_start] 处理交易对: {pair}")
+
+            # 使用预加载的最小限制
+            min_amount = self.min_amounts.get(pair, 0.00001)
+            min_stake = self.min_notional.get(pair, self.config.get('stake_min', 5.0))
+
+            # 余额获取
+            total_coin_balance = self.wallets.get_total(coin)
+            free_quote_balance = self.wallets.get_free(quote)
+
+            # 获取最新分析的 dataframe（即使没有新K线，也会返回最近一次分析的结果）
+            dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+            if dataframe is None or len(dataframe) == 0:
+                logger.debug(f"{pair} 无可用数据，跳过本次处理")
+                continue
+
+            last_row = dataframe.iloc[-1]
+
+            # 获取当前实时价格
+            try:
+                ticker = self.dp.ticker(pair)
+                current_rate = ticker['last']
+            except Exception as e:
+                logger.debug(f"获取 {pair} 实时价格失败: {e}，跳过")
+                continue
+
+            # 检查是否有开放交易
+            open_trades = Trade.get_trades_proxy(is_open=True)
+            has_open_trade = any(t.pair == pair for t in open_trades)
+
+            # exchange 实例
             try:
                 exchange = self.dp._exchange
             except AttributeError:
-                # 备选：直接用 self.exchange（某些版本有效）
                 exchange = self.exchange
 
-            # 留一点防尘埃
-            try:
-                order = exchange.create_order(
-                    pair=pair,
-                    ordertype='limit',
-                    side='sell',
-                    amount=amount,
-                    rate=sell_price,
-                    leverage=1.0
-                )
-                logger.info(
-                    f"[bot_loop_start] 挂卖单成功: {amount:.8f} {coin} @ {sell_price:.2f}, order_id: {order.get('id')}")
-                # 关键修复：每次循环前强制同步钱包余额（从交易所实时拉取）
+            # ==================== 处理历史未执行信号 ====================
+            signal_file = f'user_data/signal_{pair.replace("/", "_")}.json'
+            current_date = datetime.now().strftime('%Y-%m-%d')
+
+            last_signal = self.last_signal.get(pair)
+            if last_signal is None and os.path.exists(signal_file):
                 try:
-                    self.wallets.update()  # ← 这行就是核心！
-                    logger.debug("钱包余额已强制同步")
+                    with open(signal_file, 'r') as f:
+                        self.last_signal[pair] = json.load(f)
+                    last_signal = self.last_signal[pair]
                 except Exception as e:
-                    logger.error(f"钱包同步失败: {e}")
-                    # 可选：同步失败时直接返回，避免用旧数据下单
-                    return
-            except Exception as e:
-                # 关键修复：每次循环前强制同步钱包余额（从交易所实时拉取）
+                    logger.error(f"加载历史信号失败 {pair}: {e}")
+
+            if last_signal and not last_signal.get('executed', True):
+                signal_date = last_signal.get('date', 'N/A')
+                if signal_date in [current_date, (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')]:
+                    signal_type = last_signal['type']
+
+                    if (signal_type == 'entry' and not has_open_trade and
+                        total_coin_balance < min_amount * 2 and free_quote_balance >= min_stake):
+                        buy_price = current_rate * 1.01
+                        amount = (free_quote_balance * 0.999) / buy_price
+                        if amount >= min_amount:
+                            try:
+                                order = exchange.create_order(pair=pair, ordertype='limit', side='buy',
+                                                              amount=amount, rate=buy_price, leverage=1.0)
+                                logger.info(f"[历史信号] 补买入成功 {pair}: {amount:.8f} {coin}")
+                                last_signal['executed'] = True
+                                with open(signal_file, 'w') as f:
+                                    json.dump(last_signal, f)
+                            except Exception as e:
+                                logger.error(f"历史买入失败 {pair}: {e}")
+
+                    elif (signal_type == 'exit' and not has_open_trade and total_coin_balance > min_amount):
+                        sell_price = current_rate * 0.99
+                        amount = total_coin_balance * 0.99
+                        try:
+                            order = exchange.create_order(pair=pair, ordertype='limit', side='sell',
+                                                          amount=amount, rate=sell_price, leverage=1.0)
+                            logger.info(f"[历史信号] 补卖出成功 {pair}: {amount:.8f} {coin}")
+                            last_signal['executed'] = True
+                            with open(signal_file, 'w') as f:
+                                json.dump(last_signal, f)
+                        except Exception as e:
+                            logger.error(f"历史卖出失败 {pair}: {e}")
+
+            # ==================== 处理当前信号 ====================
+            if (last_row.get('exit_long', 0) == 1 and
+                total_coin_balance > min_amount and
+                not has_open_trade):
+
+                sell_price = current_rate * 0.99
+                amount = total_coin_balance * 0.99
+
                 try:
-                    self.wallets.update()  # ← 这行就是核心！
-                    logger.debug("钱包余额已强制同步")
+                    order = exchange.create_order(pair=pair, ordertype='limit', side='sell',
+                                                  amount=amount, rate=sell_price, leverage=1.0)
+                    logger.info(f"[卖出] 挂单成功 {pair}: {amount:.8f} {coin}")
+                    if os.path.exists(signal_file):
+                        os.remove(signal_file)
+                        self.last_signal.pop(pair, None)
                 except Exception as e:
-                    logger.error(f"钱包同步失败: {e}")
-                    # 可选：同步失败时直接返回，避免用旧数据下单
-                    return
-                logger.error(f"Failed to create sell order: {e}")
-        # 买入信号：如果有信号且有资金且无开放交易，直接挂限价买单
-        elif last_row.get('enter_long', 0) == 1 and not has_open_trade:
-            logger.info("处理买入信号")
-            # 先检查可用 quote 是否足够最小门槛
-            if free_quote_balance < min_stake:
-                logger.info(f"{quote} 可用余额为：{free_quote_balance:.2f}, 小于最小订单价值 {min_stake} USDT，本次忽略")
-                return
-
-            buy_price = current_rate * 1.01
-            # 使用几乎全部可用余额，但留 0.1% 防尘埃/手续费
-            amount = (free_quote_balance * 0.999) / buy_price
-
-            # 检查计算出的 amount 是否满足最小币种数量
-            if amount < 0.00001:
-                logger.info(f"计算买入 {coin} 数量为：{amount:.8f}, 小于最小可买卖单位 0.00001 BTC，本次忽略")
-                return
-
-            # 可选：额外检查订单总价值（虽已检查余额，但以防价格波动）
-            order_value = amount * buy_price
-            if order_value < min_stake:
-                logger.info(f"订单总价值 {order_value:.2f} USDT 小于最小门槛 {min_stake} USDT，本次忽略")
-                return
-            # 安全获取 exchange 实例
-            try:
-                exchange = self.dp._exchange
-            except AttributeError:
-                # 备选：直接用 self.exchange（某些版本有效）
-                exchange = self.exchange
-            try:
-                order = exchange.create_order(
-                    pair=pair,
-                    ordertype='limit',
-                    side='buy',
-                    amount=amount,
-                    rate=buy_price,
-                    leverage=1.0
-                )
-                logger.info(
-                    f"[bot_loop_start] 挂买单成功: {amount:.8f} {coin} @ {buy_price:.2f}, order_id: {order.get('id')}")
-            except Exception as e:
-                logger.error(f"Failed to create buy order: {e}")
-            finally:
-                # 无论成功或失败，都强制同步钱包
-                try:
+                    logger.error(f"卖出挂单失败 {pair}: {e}")
+                finally:
                     self.wallets.update()
-                    logger.debug("钱包余额已强制同步")
-                except Exception as sync_e:
-                    logger.error(f"钱包同步失败: {sync_e}")
-        else:
-            logger.info("本次没有任何买入或卖信号，忽略处理")
+
+            elif (last_row.get('enter_long', 0) == 1 and
+                  not has_open_trade):
+
+                if free_quote_balance < min_stake:
+                    logger.info(f"{pair} 可用资金不足，忽略买入")
+                    continue
+
+                buy_price = current_rate * 1.01
+                amount = (free_quote_balance * 0.999) / buy_price
+
+                if amount < min_amount:
+                    logger.info(f"{pair} 买入数量太小，忽略")
+                    continue
+
+                order_value = amount * buy_price
+                if order_value < min_stake:
+                    logger.info(f"{pair} 订单价值太小，忽略")
+                    continue
+
+                try:
+                    order = exchange.create_order(pair=pair, ordertype='limit', side='buy',
+                                                  amount=amount, rate=buy_price, leverage=1.0)
+                    logger.info(f"[买入] 挂单成功 {pair}: {amount:.8f} {coin}")
+                    if os.path.exists(signal_file):
+                        os.remove(signal_file)
+                        self.last_signal.pop(pair, None)
+                except Exception as e:
+                    logger.error(f"买入挂单失败 {pair}: {e}")
+                finally:
+                    self.wallets.update()
+
+        logger.debug("bot_loop_start 本次循环完成")
