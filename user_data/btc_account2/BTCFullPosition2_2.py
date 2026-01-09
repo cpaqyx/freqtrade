@@ -531,27 +531,28 @@ class BTCFullPosition2_2(IStrategy):
                     f"最新K线:{last_row['date']}, enter_long:{last_row.get('enter_long', 0)}, "
                     f"exit_long:{last_row.get('exit_long', 0)}")
 
-        # 关键安全检查：有未成交订单时不调整，避免频繁取消/重下单
+        # 修改后的挂单检查：仅对买入信号应用检查，对卖出信号允许继续执行全卖（忽略挂单）
         if trade.has_open_orders:
-            logger.info("[adjust_trade_position] 存在挂单，跳过本次调整")
-            return None
-
-        # 1. 卖出信号：全仓平仓（包括钱包中多余的尘埃币）
-        if last_row.get('exit_long', 0) == 1:
-            extra_coin = total_coin_balance - trade.amount  # 钱包中多出的尘埃币
-            if extra_coin > 0:
-                # 卖出机器人所有仓位 + 尘埃币（留0.1%手续费余地）
-                sell_stake = (trade.amount + extra_coin) * current_rate * 0.99
-                logger.info(f"[adjust_trade_position] 全卖 + 尘埃 ({extra_coin:.8f} {coin})，返回 -{sell_stake:.2f}")
-                return -sell_stake
-            elif trade.stake_amount > 0:
-                # 只卖机器人持仓
-                logger.info(f"[adjust_trade_position] 全卖机器人持仓，返回 -{trade.stake_amount:.2f}")
-                return -trade.stake_amount
+            if last_row.get('exit_long', 0) == 1:
+                logger.info("[adjust_trade_position] 存在挂单，但卖出信号，继续全卖")
             else:
-                logger.info(f"[adjust_trade_position] 全卖无持仓-{trade.stake_amount:.2f}")
+                logger.info("[adjust_trade_position] 存在挂单，跳过本次调整")
+                return None
 
-        # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入）
+        # 1. 卖出信号：全仓平仓（包括钱包中多余的尘埃币），持续尝试直到卖完
+        if last_row.get('exit_long', 0) == 1:
+            # 计算总需卖出量（机器人持仓 + 尘埃）
+            total_to_sell = total_coin_balance
+            if total_to_sell > 0:
+                # 卖出全部（留0.1%手续费余地）
+                sell_stake = total_to_sell * current_rate * 0.99
+                logger.info(f"[adjust_trade_position] 全卖全部仓位 ({total_to_sell:.8f} {coin})，返回 -{sell_stake:.2f}")
+                return -sell_stake
+            else:
+                logger.info("[adjust_trade_position] 无仓位可卖，返回 None")
+                return None
+
+        # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入），持续尝试直到买完可用资金
         elif last_row.get('enter_long', 0) == 1:
             if free_quote_balance > min_stake:  # 有足够资金才加仓
                 # 用掉几乎所有可用稳定币（留一点防滑点/手续费）
@@ -566,3 +567,62 @@ class BTCFullPosition2_2(IStrategy):
         # 3. 无信号：不操作
         logger.info("[adjust_trade_position] 无明确进出信号，返回 None")
         return None
+    
+    # def adjust_trade_position(self, trade: Trade, current_time: datetime,
+    #                           current_rate: float, current_profit: float,
+    #                           min_stake: Optional[float], max_stake: float,
+    #                           current_entry_rate: float, current_exit_rate: float,
+    #                           current_entry_profit: float, current_exit_profit: float,
+    #                           **kwargs) -> Optional[float]:
+    #
+    #     coin, quote = trade.pair.split('/')  # e.g., 'BTC/USDT' → coin='BTC', quote='USDT'
+    #
+    #     # 获取钱包余额
+    #     total_coin_balance = self.wallets.get_total(coin)  # 该币总持有量（包括尘埃）
+    #     free_quote_balance = self.wallets.get_free(quote)  # 可用稳定币余额（可用于买入）
+    #
+    #     # 获取最新信号
+    #     dataframe, _ = self.dp.get_analyzed_dataframe(trade.pair, self.timeframe)
+    #     last_row = dataframe.iloc[-1]
+    #
+    #     logger.info(f"[adjust_trade_position] 时间:{current_time}, 交易对:{trade.pair}, "
+    #                 f"钱包{coin}:{total_coin_balance:.8f}, 机器人持仓:{trade.amount:.8f}, "
+    #                 f"可用{quote}:{free_quote_balance:.2f}, 当前价:{current_rate}, "
+    #                 f"最新K线:{last_row['date']}, enter_long:{last_row.get('enter_long', 0)}, "
+    #                 f"exit_long:{last_row.get('exit_long', 0)}")
+    #
+    #     # 关键安全检查：有未成交订单时不调整，避免频繁取消/重下单
+    #     if trade.has_open_orders:
+    #         logger.info("[adjust_trade_position] 存在挂单，跳过本次调整")
+    #         return None
+    #
+    #     # 1. 卖出信号：全仓平仓（包括钱包中多余的尘埃币）
+    #     if last_row.get('exit_long', 0) == 1:
+    #         extra_coin = total_coin_balance - trade.amount  # 钱包中多出的尘埃币
+    #         if extra_coin > 0:
+    #             # 卖出机器人所有仓位 + 尘埃币（留0.1%手续费余地）
+    #             sell_stake = (trade.amount + extra_coin) * current_rate * 0.99
+    #             logger.info(f"[adjust_trade_position] 全卖 + 尘埃 ({extra_coin:.8f} {coin})，返回 -{sell_stake:.2f}")
+    #             return -sell_stake
+    #         elif trade.stake_amount > 0:
+    #             # 只卖机器人持仓
+    #             logger.info(f"[adjust_trade_position] 全卖机器人持仓，返回 -{trade.stake_amount:.2f}")
+    #             return -trade.stake_amount
+    #         else:
+    #             logger.info(f"[adjust_trade_position] 全卖无持仓-{trade.stake_amount:.2f}")
+    #
+    #     # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入）
+    #     elif last_row.get('enter_long', 0) == 1:
+    #         if free_quote_balance > min_stake:  # 有足够资金才加仓
+    #             # 用掉几乎所有可用稳定币（留一点防滑点/手续费）
+    #             add_stake = free_quote_balance * 0.999
+    #             logger.info(
+    #                 f"[adjust_trade_position] 全仓加仓，可用{quote}:{free_quote_balance:.2f}，返回 +{add_stake:.2f}")
+    #             return add_stake
+    #         else:
+    #             logger.info(f"[adjust_trade_position] 买入信号但可用资金不足{min_stake}，跳过加仓")
+    #             return None
+    #
+    #     # 3. 无信号：不操作
+    #     logger.info("[adjust_trade_position] 无明确进出信号，返回 None")
+    #     return None
