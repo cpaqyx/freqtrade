@@ -75,7 +75,8 @@
   "initial_state": "running",
   "force_entry_enable": false,
   "internals": {
-    "process_throttle_secs": 60
+    "process_throttle_secs": 300,
+    "heartbeat_interval": 300
   },
 
   "strategy": "BTCFullPosition",
