@@ -1,0 +1,129 @@
+========================================
+BTC全仓策略 - 实盘启动说明
+========================================
+
+一、启动脚本
+-----------
+文件：start_live.bat
+功能：启动 BTCFullPosition 策略实盘/模拟盘运行
+
+二、配置文件
+-----------
+1. config.json - 主配置文件
+   - exchange.key: Binance API Key
+   - exchange.secret: Binance API Secret
+   - dry_run: true（模拟盘）/ false（实盘）
+
+2. BTCFullPosition.json - 策略参数文件
+   - 包含优化后的策略参数
+   - 自动加载，无需手动配置
+
+三、启动前检查
+-------------
+[ ] API Key 和 Secret 已配置
+[ ] 确认 dry_run 设置（true=模拟，false=实盘）
+[ ] 代理设置正确（如需要）
+[ ] 账户有足够余额（实盘）
+
+四、运行模式
+-----------
+1. 模拟盘（dry_run: true）
+   - 不执行真实交易
+   - 用于测试策略
+   - 使用虚拟资金
+
+2. 实盘（dry_run: false）
+   - 执行真实交易 ⚠️
+   - 需要真实 API 密钥
+   - 使用真实资金
+
+五、启动步骤
+-----------
+1. 配置 API 密钥
+   编辑 user_data/btc/config.json：
+   "key": "您的API_KEY",
+   "secret": "您的API_SECRET",
+
+2. 设置运行模式
+   "dry_run": true,    # 模拟盘
+   或
+   "dry_run": false,   # 实盘 ⚠️
+
+3. 运行启动脚本
+   双击 start_live.bat
+
+4. 确认信息
+   - 检查配置显示
+   - 确认运行模式
+   - 实盘模式需二次确认
+
+六、监控运行
+-----------
+1. FreqUI 界面
+   http://127.0.0.1:8086
+   用户名：admin
+   密码：admin123
+
+2. 日志文件
+   user_data/logs/btc_live.log
+
+3. 交易数据库
+   tradesv3_btc_fullposition.sqlite
+
+七、停止运行
+-----------
+在运行窗口按 Ctrl+C
+策略会安全关闭
+
+八、重要提示
+-----------
+⚠️ 实盘交易风险
+- 加密货币价格波动大
+- 可能损失全部资金
+- 仅投入可承受损失的资金
+
+✓ 建议流程
+1. 先用模拟盘测试 1-2 周
+2. 验证策略逻辑无误
+3. 小资金启动实盘
+4. 持续监控运行状态
+
+九、配置示例
+-----------
+模拟盘配置：
+{
+  "dry_run": true,
+  "dry_run_wallet": 10000,
+  "exchange": {
+    "key": "您的API_KEY",
+    "secret": "您的API_SECRET"
+  }
+}
+
+实盘配置：
+{
+  "dry_run": false,
+  "exchange": {
+    "key": "您的API_KEY",
+    "secret": "您的API_SECRET"
+  }
+}
+
+十、常见问题
+-----------
+Q: 如何切换模拟盘和实盘？
+A: 修改 config.json 中的 dry_run 值
+
+Q: API 密钥在哪里获取？
+A: Binance → 个人中心 → API管理
+
+Q: 如何查看运行状态？
+A: 访问 http://127.0.0.1:8086
+
+Q: 如何修改策略参数？
+A: 编辑 BTCFullPosition.json 文件
+
+========================================
+创建时间：2025-11-06
+========================================
+
