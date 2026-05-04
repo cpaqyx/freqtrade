@@ -1,0 +1,68 @@
+========================================
+Windows 编码问题 - 快速修复总结
+========================================
+
+一、问题
+--------
+错误：UnicodeEncodeError: 'gbk' codec can't encode character
+原因：策略日志中使用了 emoji 表情符号
+影响：实盘运行时日志输出报错
+
+二、解决方案
+-----------
+✓ 已将所有 emoji 替换为文本标记：
+  - ✅ → [OK]
+  - 📈 → [BUY]
+  - 📉 → [SELL]
+
+✓ 修复位置：
+  - user_data/btc/BTCFullPosition.py
+  - user_data/strategies/BTCFullPosition.py
+
+三、修复内容
+-----------
+共修复 8 处日志输出：
+1. [OK] BTC全仓策略已初始化
+2. [SELL] 平仓信号-AB: A比B高
+3. [SELL] 平仓信号-AB: A比B低
+4. [SELL] 平仓信号-AC: A比C高
+5. [SELL] 平仓信号-AC: A比C低
+6. [BUY] 条件2.1满足
+7. [BUY] 条件2.2满足(flat)
+8. [BUY] 条件2.2满足(小up)
+
+四、验证
+-------
+重新启动实盘：
+> user_data\btc\start_live.bat
+
+预期日志：
+> [OK] BTC全仓策略已初始化
+> [BUY] 条件2.1满足: 最后up/flat...
+> [SELL] 平仓信号...
+
+不再出现编码错误 ✓
+
+五、文件状态
+-----------
+✓ user_data/btc/BTCFullPosition.py - 已修复
+✓ user_data/strategies/BTCFullPosition.py - 已同步
+✓ 编码问题修复说明.md - 已创建
+
+六、重要提示
+-----------
+⚠ 如需使用 emoji：
+  - 推荐使用日志文件（支持 UTF-8）
+  - 或使用 Windows Terminal
+  - 不推荐修改控制台编码
+
+✓ 当前方案优势：
+  - 兼容性好
+  - 稳定可靠
+  - 无需额外配置
+
+========================================
+修复完成时间：2025-11-06
+状态：✓ 可以正常运行
+========================================
+

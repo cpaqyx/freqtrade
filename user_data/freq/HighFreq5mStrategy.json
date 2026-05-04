@@ -1,0 +1,48 @@
+{
+  "strategy_name": "HighFreq5mStrategy",
+  "params": {
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.015,
+      "trailing_stop_positive_offset": 0.025,
+      "trailing_only_offset_is_reached": true
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "bb_buy_threshold": 0.03,
+      "bb_length": 40,
+      "bb_std": 1.6,
+      "consecutive_candles": 5,
+      "ema_long": 101,
+      "ema_medium": 48,
+      "ema_short": 7,
+      "fgi_extreme_fear": 26,
+      "min_long_signals": 4,
+      "sr_lookback": 60,
+      "sr_threshold": 0.005,
+      "supertrend_multiplier": 3.8,
+      "supertrend_period": 12,
+      "use_fgi_filter": true
+    },
+    "sell": {
+      "bb_sell_threshold": 1.0,
+      "custom_stoploss_value": -0.047,
+      "fgi_extreme_greed": 69,
+      "min_short_signals": 4
+    },
+    "protection": {},
+    "roi": {
+      "0": 0.167,
+      "32": 0.056,
+      "65": 0.014,
+      "151": 0
+    },
+    "stoploss": {
+      "stoploss": -0.293
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2025-10-24 10:01:28.343569+00:00"
+}
