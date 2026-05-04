@@ -74,3 +74,8 @@ docker-compose.override.yml
 /user_data/logs
 /user_data/backtest_results
 /user_data/strategies
+
+# 额外的交易数据库文件
+tradesv3_btc_account1.sqlite
+tradesv3_btc_account1.sqlite-shm
+tradesv3_btc_account1.sqlite-wal

@@ -8,6 +8,8 @@
   "amend_last_stake_amount": true,
   "position_adjustment_enable": true,
   "fiat_display_currency": "USD",
+  "http_proxy": "http://127.0.0.1:7890",
+  "https_proxy": "http://127.0.0.1:7890",
   "dry_run": false,
   "cancel_open_orders_on_exit": false,
 
@@ -62,11 +64,11 @@
 
   "api_server": {
     "enabled": true,
-    "listen_ip_address": "127.0.0.1",
+    "listen_ip_address": "0.0.0.0",
     "listen_port": 8092,
     "verbosity": "error",
     "jwt_secret_key": "btc_fullposition_2025",
-    "CORS_origins": ["http://127.0.0.1:3000"],
+    "CORS_origins": ["http://127.0.0.1:3000", "http://118.89.101.139:8081"],
     "username": "admin",
     "password": "admin123"
   },
