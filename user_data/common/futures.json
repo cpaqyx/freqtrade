@@ -32,7 +32,15 @@
       "wsProxy": "http://127.0.0.1:7890",
       "enableRateLimit": true,
       "rateLimit": 1000,
-      "options": { "defaultType": "swap" }
+      "options": { "defaultType": "swap" },
+      "urls": {
+        "api": {
+          "public": "https://data-api.binance.vision/api/v3",
+          "private": "https://data-api.binance.vision/api/v3",
+          "fapiPublic": "https://fapi.binance.com/fapi/v1",
+          "fapiPrivate": "https://fapi.binance.com/fapi/v1"
+        }
+      }
     },
     "ccxt_async_config": {
       "enableRateLimit": true,

@@ -336,7 +336,7 @@ To run this bot we recommend you a cloud instance with a minimum of:
 
 - Minimal (advised) system requirements: 2GB RAM, 1GB disk space, 2vCPU
 
-### Software requirements
+### Software requirements 0405
 
 - [Python >= 3.11](http://docs.python-guide.org/en/latest/starting/installation/)
 - [pip](https://pip.pypa.io/en/stable/installing/)
