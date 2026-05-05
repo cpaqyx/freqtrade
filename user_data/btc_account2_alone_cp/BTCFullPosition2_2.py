@@ -487,18 +487,17 @@ class BTCFullPosition2_2(IStrategy):
         coin, quote = trade.pair.split('/')  # e.g., 'BTC/USDT' → coin='BTC', quote='USDT'
 
         # 获取钱包余额
-        total_coin_balance = self.wallets.get_total(coin)  # 该币总持有量（包括尘埃）
+        total_coin_balance = self.wallets.get_total(coin)  # 该币总持有量（包括非机器人管理的）
         free_quote_balance = self.wallets.get_free(quote)  # 可用稳定币余额（可用于买入）
 
         # 获取最新信号
         dataframe, _ = self.dp.get_analyzed_dataframe(trade.pair, self.timeframe)
         last_row = dataframe.iloc[-1]
 
-        logger.info(f"[adjust_trade_position] 时间:{current_time}, 交易对:{trade.pair}, "
-                    f"钱包{coin}:{total_coin_balance:.8f}, 机器人持仓:{trade.amount:.8f}, "
-                    f"可用{quote}:{free_quote_balance:.2f}, 当前价:{current_rate}, "
-                    f"最新K线:{last_row['date']}, enter_long:{last_row.get('enter_long', 0)}, "
-                    f"exit_long:{last_row.get('exit_long', 0)}")
+        logger.info(f"[adjust_trade_position] 时间:{current_time}, 交易对:{trade.pair}, ")
+        logger.info(f"  钱包{coin}:{total_coin_balance:.8f}, 机器人持仓:{trade.amount:.8f}, ")
+        logger.info(f"  可用{quote}:{free_quote_balance:.2f}, 当前价:{current_rate}, ")
+        logger.info(f"  最新K线:{last_row['date']}, enter_long:{last_row.get('enter_long', 0)}, exit_long:{last_row.get('exit_long', 0)}")
 
         # 修改后的挂单检查：仅对买入信号应用检查，对卖出信号允许继续执行全卖（忽略挂单）
         if trade.has_open_orders:
@@ -508,26 +507,25 @@ class BTCFullPosition2_2(IStrategy):
                 logger.info("[adjust_trade_position] 存在挂单，跳过本次调整")
                 return None
 
-        # 1. 卖出信号：全仓平仓（包括钱包中多余的尘埃币），持续尝试直到卖完
+        # 1. 卖出信号：全仓平仓（包括钱包中所有的币，含非机器人管理的）
         if last_row.get('exit_long', 0) == 1:
-            # 计算总需卖出量（机器人持仓 + 尘埃）
+            # 计算总需卖出量（钱包中所有的币）
             total_to_sell = total_coin_balance
             if total_to_sell > 0:
                 # 卖出全部（留0.1%手续费余地）
-                sell_stake = total_to_sell * current_rate * 0.99
+                sell_stake = total_to_sell * current_rate * 0.999
                 logger.info(f"[adjust_trade_position] 全卖全部仓位 ({total_to_sell:.8f} {coin})，返回 -{sell_stake:.2f}")
                 return -sell_stake
             else:
                 logger.info("[adjust_trade_position] 无仓位可卖，返回 None")
                 return None
 
-        # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入），持续尝试直到买完可用资金
+        # 2. 买入信号：全仓加仓（用尽所有可用稳定币买入）
         elif last_row.get('enter_long', 0) == 1:
             if free_quote_balance > min_stake:  # 有足够资金才加仓
                 # 用掉几乎所有可用稳定币（留一点防滑点/手续费）
                 add_stake = free_quote_balance * 0.999
-                logger.info(
-                    f"[adjust_trade_position] 全仓加仓，可用{quote}:{free_quote_balance:.2f}，返回 +{add_stake:.2f}")
+                logger.info(f"[adjust_trade_position] 全仓加仓，可用{quote}:{free_quote_balance:.2f}，返回 +{add_stake:.2f}")
                 return add_stake
             else:
                 logger.info(f"[adjust_trade_position] 买入信号但可用资金不足{min_stake}，跳过加仓")
@@ -553,10 +551,13 @@ class BTCFullPosition2_2(IStrategy):
         pair = 'BTC/USDT'
         coin = 'BTC'
         quote = 'USDT'
-        total_coin_balance = self.wallets.get_total(coin)
-        free_quote_balance = self.wallets.get_free(quote)
+        
+        # 获取钱包余额（关键：这是实际交易所余额，包括非机器人管理的资产）
+        total_coin_balance = self.wallets.get_total(coin)  # 所有BTC（包括非机器人管理的）
+        free_quote_balance = self.wallets.get_free(quote)  # 可用USDT
+        
         # 假设最小下单金额，从配置中获取或硬编码
-        min_stake = self.config.get('stake_min', 5.0)  # 如果配置中无，默认为5 USDT
+        min_stake = self.config.get('stake_min', 10.0)  # Binance BTC/USDT 最小10 USDT
 
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if len(dataframe) == 0:
@@ -576,22 +577,30 @@ class BTCFullPosition2_2(IStrategy):
         open_trades = Trade.get_trades_proxy(is_open=True)
         has_open_trade = any(t.pair == pair for t in open_trades)
 
-        # 卖出信号：如果有信号且有持仓且无开放交易，直接挂限价卖单
-        if last_row.get('exit_long', 0) == 1 and total_coin_balance > 0 and not has_open_trade:
-            logger.info("处理卖出信号")
-            if total_coin_balance < 0.00001:
-                logger.info(f"{coin} 可用于交易的数量为：{total_coin_balance}, 小于最小可买卖单位，本次忽略")
+        logger.info(f"[bot_loop_start] 钱包{coin}:{total_coin_balance:.8f}, 可用{quote}:{free_quote_balance:.2f}, ")
+        logger.info(f"  当前价:{current_rate:.2f}, 有开放交易:{has_open_trade}, ")
+        logger.info(f"  enter_long:{last_row.get('enter_long', 0)}, exit_long:{last_row.get('exit_long', 0)}")
+
+        # 卖出信号：如果有信号且有持仓（无论是否有开放交易），直接挂限价卖单
+        if last_row.get('exit_long', 0) == 1 and total_coin_balance > 0:
+            logger.info("[bot_loop_start] 处理卖出信号 - 全卖所有BTC")
+            
+            # 检查最小交易量
+            min_btc_amount = 0.00001  # BTC 最小交易量
+            if total_coin_balance < min_btc_amount:
+                logger.info(f"{coin} 可用于交易的数量为：{total_coin_balance:.8f}, 小于最小可买卖单位 {min_btc_amount}，本次忽略")
                 return
-            sell_price = current_rate * 0.99
-            amount = total_coin_balance * 0.99  # 留一点防尘埃
+            
+            # 计算卖单参数
+            sell_price = current_rate * 0.99  # 限价单：当前价-1%
+            amount = total_coin_balance * 0.999  # 留一点防尘埃
+            
             # 安全获取 exchange 实例
             try:
                 exchange = self.dp._exchange
             except AttributeError:
-                # 备选：直接用 self.exchange（某些版本有效）
                 exchange = self.exchange
 
-            # 留一点防尘埃
             try:
                 order = exchange.create_order(
                     pair=pair,
@@ -601,54 +610,48 @@ class BTCFullPosition2_2(IStrategy):
                     rate=sell_price,
                     leverage=1.0
                 )
-                logger.info(
-                    f"[bot_loop_start] 挂卖单成功: {amount:.8f} {coin} @ {sell_price:.2f}, order_id: {order.get('id')}")
-                # 关键修复：每次循环前强制同步钱包余额（从交易所实时拉取）
+                logger.info(f"[bot_loop_start] 挂卖单成功: {amount:.8f} {coin} @ {sell_price:.2f}, order_id: {order.get('id')}")
+                
+                # 强制同步钱包余额
                 try:
-                    self.wallets.update()  # ← 这行就是核心！
+                    self.wallets.update()
                     logger.debug("钱包余额已强制同步")
                 except Exception as e:
                     logger.error(f"钱包同步失败: {e}")
-                    # 可选：同步失败时直接返回，避免用旧数据下单
-                    return
             except Exception as e:
-                # 关键修复：每次循环前强制同步钱包余额（从交易所实时拉取）
+                logger.error(f"挂卖单失败: {e}")
+                # 即使失败也同步钱包
                 try:
-                    self.wallets.update()  # ← 这行就是核心！
-                    logger.debug("钱包余额已强制同步")
-                except Exception as e:
-                    logger.error(f"钱包同步失败: {e}")
-                    # 可选：同步失败时直接返回，避免用旧数据下单
-                    return
-                logger.error(f"Failed to create sell order: {e}")
-        # 买入信号：如果有信号且有资金且无开放交易，直接挂限价买单
-        elif last_row.get('enter_long', 0) == 1 and not has_open_trade:
-            logger.info("处理买入信号")
-            # 先检查可用 quote 是否足够最小门槛
-            if free_quote_balance < min_stake:
-                logger.info(f"{quote} 可用余额为：{free_quote_balance:.2f}, 小于最小订单价值 {min_stake} USDT，本次忽略")
-                return
-
-            buy_price = current_rate * 1.01
-            # 使用几乎全部可用余额，但留 0.1% 防尘埃/手续费
+                    self.wallets.update()
+                except Exception as sync_e:
+                    logger.error(f"钱包同步失败: {sync_e}")
+        
+        # 买入信号：如果有信号且有资金（无论是否有开放交易），直接挂限价买单
+        elif last_row.get('enter_long', 0) == 1 and free_quote_balance > min_stake:
+            logger.info("[bot_loop_start] 处理买入信号 - 全买BTC")
+            
+            buy_price = current_rate * 1.01  # 限价单：当前价+1%
+            # 使用几乎全部可用余额，留 0.1% 防尘埃/手续费
             amount = (free_quote_balance * 0.999) / buy_price
 
             # 检查计算出的 amount 是否满足最小币种数量
-            if amount < 0.00001:
-                logger.info(f"计算买入 {coin} 数量为：{amount:.8f}, 小于最小可买卖单位 0.00001 BTC，本次忽略")
+            min_btc_amount = 0.00001
+            if amount < min_btc_amount:
+                logger.info(f"计算买入 {coin} 数量为：{amount:.8f}, 小于最小可买卖单位 {min_btc_amount} BTC，本次忽略")
                 return
 
-            # 可选：额外检查订单总价值（虽已检查余额，但以防价格波动）
+            # 检查订单总价值
             order_value = amount * buy_price
             if order_value < min_stake:
                 logger.info(f"订单总价值 {order_value:.2f} USDT 小于最小门槛 {min_stake} USDT，本次忽略")
                 return
+            
             # 安全获取 exchange 实例
             try:
                 exchange = self.dp._exchange
             except AttributeError:
-                # 备选：直接用 self.exchange（某些版本有效）
                 exchange = self.exchange
+                
             try:
                 order = exchange.create_order(
                     pair=pair,
@@ -658,10 +661,9 @@ class BTCFullPosition2_2(IStrategy):
                     rate=buy_price,
                     leverage=1.0
                 )
-                logger.info(
-                    f"[bot_loop_start] 挂买单成功: {amount:.8f} {coin} @ {buy_price:.2f}, order_id: {order.get('id')}")
+                logger.info(f"[bot_loop_start] 挂买单成功: {amount:.8f} {coin} @ {buy_price:.2f}, order_id: {order.get('id')}")
             except Exception as e:
-                logger.error(f"Failed to create buy order: {e}")
+                logger.error(f"挂买单失败: {e}")
             finally:
                 # 无论成功或失败，都强制同步钱包
                 try:
@@ -670,4 +672,4 @@ class BTCFullPosition2_2(IStrategy):
                 except Exception as sync_e:
                     logger.error(f"钱包同步失败: {sync_e}")
         else:
-            logger.info("本次没有任何买入或卖信号，忽略处理")
+            logger.info("[bot_loop_start] 本次没有任何买入或卖信号，或资金/仓位不足，忽略处理")
