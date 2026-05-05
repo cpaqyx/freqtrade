@@ -78,4 +78,4 @@ docker-compose.override.yml
 # 额外的交易数据库文件
 tradesv3_btc_account1.sqlite
 tradesv3_btc_account1.sqlite-shm
-tradesv3_btc_account1.sqlite-wal
+*.pid
