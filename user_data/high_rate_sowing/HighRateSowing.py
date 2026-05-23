@@ -79,24 +79,24 @@ class HighRateSowing(IStrategy):
     # 最大持仓数量
     max_open_trades = 3
     
-    # 从最高点跌幅阈值（建仓条件1）
+    # 从最高点跌幅阈值（建仓条件1）- 降低阈值以适应震荡行情
     max_drop_from_high = DecimalParameter(
-        0.05, 0.50, default=0.15, decimals=2, space='buy', optimize=True, load=True
+        0.01, 0.50, default=0.03, decimals=2, space='buy', optimize=True, load=True
     )
     
     # 单根K线涨幅阈值
     candle_rise_threshold = DecimalParameter(
-        0.001, 0.05, default=0.005, decimals=3, space='buy', optimize=True, load=True
+        0.001, 0.05, default=0.003, decimals=3, space='buy', optimize=True, load=True
     )
     
     # 连续涨幅阈值（3根K线）
     continuous_rise_threshold = DecimalParameter(
-        0.005, 0.15, default=0.02, decimals=3, space='buy', optimize=True, load=True
+        0.002, 0.15, default=0.01, decimals=3, space='buy', optimize=True, load=True
     )
     
-    # 图形下跌幅度阈值
+    # 图形下跌幅度阈值 - 降低阈值以适应震荡行情
     pattern_drop_threshold = DecimalParameter(
-        0.005, 0.30, default=0.03, decimals=3, space='buy', optimize=True, load=True
+        0.002, 0.30, default=0.01, decimals=3, space='buy', optimize=True, load=True
     )
     
     # -------------------- 压力支撑相关参数 --------------------
@@ -282,7 +282,7 @@ class HighRateSowing(IStrategy):
         
         rise_condition = single_rise | continuous_rise
         
-        # ========== 条件3：图形反转条件 ==========
+        # ========== 条件3：图形反转条件（大跌后反弹）==========
         dataframe['pattern_entry_signal'] = False
         
         for i in range(90, len(dataframe)):
@@ -349,24 +349,48 @@ class HighRateSowing(IStrategy):
         
         condition_pattern = rise_condition & dataframe['pattern_entry_signal']
         
-        # ========== 条件4：支撑位附近 + 上涨趋势 ==========
+        # ========== 条件4：震荡行情支撑位反弹（新增）==========
+        # 当价格接近支撑位（最近down线段最低价），且出现上涨信号时建仓
+        
+        # 获取最近down线段的最小价格作为支撑
+        support_available = dataframe['last_segment_min'].notna() & (dataframe['last_segment_min'] > 0)
+        
+        # 价格在支撑位附近（跌幅小于阈值）
+        near_support_oscillation = (
+            support_available &
+            (dataframe['close'] >= dataframe['last_segment_min'] * 0.98) &  # 价格不低于支撑2%
+            (dataframe['close'] <= dataframe['last_segment_min'] * 1.02) &  # 价格不高于支撑2%
+            single_rise  # 有上涨信号
+        )
+        
+        # ========== 条件5：简单上涨趋势入场（新增）==========
+        # 当最近线段为up，且有上涨信号时直接入场
+        uptrend = (dataframe['last_segment_line'] == 'up')
+        simple_uptrend_entry = uptrend & single_rise
+        
+        # ========== 条件4验证：支撑位附近 ==========
         
         # 价格在支撑位上方X%以内
         near_support = (
+            (dataframe['shape_support'].notna()) &
             (dataframe['dist_to_support'] >= 0) &
             (dataframe['dist_to_support'] <= self.entry_near_support_pct.value)
         )
-        
-        # 最近一根线段为up（上涨趋势）
-        uptrend = (dataframe['last_segment_line'] == 'up')
         
         condition_support = near_support & uptrend
         
         # ========== 最终建仓条件 ==========
         
-        # 必须满足：条件1或条件2+3，并且满足条件4
+        # 方案1：满足条件1或条件2+3，且满足条件4（支撑位附近）
+        # 方案2：满足条件1或条件2+3，且最近线段为up（不要求支撑位）
         base_condition = condition_drop | condition_pattern
-        final_condition = base_condition & condition_support
+        final_condition = (base_condition & condition_support) | (base_condition & uptrend)
+        
+        # 方案3：震荡行情支撑位反弹
+        final_condition = final_condition | near_support_oscillation
+        
+        # 方案4：简单上涨趋势入场
+        final_condition = final_condition | simple_uptrend_entry
         
         dataframe.loc[final_condition, 'enter_long'] = 1
         
@@ -382,6 +406,23 @@ class HighRateSowing(IStrategy):
         dataframe.loc[condition_drop & condition_pattern & condition_support, 'enter_tag'] = (
             'C1+C2:跌' + (drop_from_high * 100).round(1).astype(str) + '%+反转+支撑'
         )
+        
+        # 新增：满足基本条件且上涨趋势（不要求支撑位）
+        dataframe.loc[condition_drop & uptrend & ~condition_support, 'enter_tag'] = (
+            'C1:跌' + (drop_from_high * 100).round(1).astype(str) + '%+上涨'
+        )
+        
+        dataframe.loc[condition_pattern & uptrend & ~condition_support, 'enter_tag'] = 'C2:涨+反转+上涨'
+        
+        dataframe.loc[condition_drop & condition_pattern & uptrend & ~condition_support, 'enter_tag'] = (
+            'C1+C2:跌' + (drop_from_high * 100).round(1).astype(str) + '%+反转+上涨'
+        )
+        
+        # 震荡行情支撑位反弹
+        dataframe.loc[near_support_oscillation, 'enter_tag'] = 'C3:震荡支撑反弹'
+        
+        # 简单上涨趋势入场
+        dataframe.loc[simple_uptrend_entry, 'enter_tag'] = 'C4:上涨趋势入场'
         
         # 统计信号
         entry_count = final_condition.sum()
