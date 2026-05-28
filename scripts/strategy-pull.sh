@@ -1,10 +1,8 @@
 #!/bin/bash
 
-# Git Sync - Freqtrade 项目专用 Git 同步工具
-# 功能：自动提交、拉取、推送代码，支持网络重试
-# 用法：./git-sync.sh [commit-message]
-#       ./git-sync.sh --push-only
-#       ./git-sync.sh --pull-only
+# Strategy Pull - Freqtrade 项目专用策略更新工具
+# 功能：拉取策略仓库的最新代码，支持网络重试和代理
+# 用法：./strategy-pull.sh [--branch=branch-name]
 # 注意：此脚本仅用于 freqtrade 项目，必须在项目根目录执行
 
 set -e
@@ -14,6 +12,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 默认配置
@@ -22,6 +21,7 @@ RETRY_DELAY=5
 PROXY_HOST="127.0.0.1"
 PROXY_PORT="7890"
 EXPECTED_REPO="/opt/git/freqtrade"
+DEFAULT_BRANCH="develop"
 
 # 打印带颜色的消息
 log_info() {
@@ -38,6 +38,10 @@ log_warning() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo -e "${CYAN}[STEP]${NC} $1"
 }
 
 # 检查是否在 freqtrade 项目根目录
@@ -114,50 +118,72 @@ get_current_branch() {
     git branch --show-current
 }
 
-# 检查是否有未提交的更改
-has_changes() {
-    [ -n "$(git status --porcelain)" ]
+# 显示策略目录
+show_strategies() {
+    log_info "可用的策略目录："
+    echo ""
+    ls -1 user_data/ | grep -E "high_rate|strategy" | while read dir; do
+        echo "  - $dir"
+    done
+    echo ""
 }
 
-# 检查是否有未推送的提交
-has_unpushed() {
-    local branch=$(get_current_branch)
-    local upstream=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "origin/$branch")
-    [ -n "$(git log $upstream..HEAD --oneline 2>/dev/null)" ]
+# 显示最新提交
+show_latest_commit() {
+    log_info "最新提交信息："
+    git log -1 --pretty=format:"  提交: %h%n  作者: %an%n  日期: %ad%n  信息: %s" --date=format:'%Y-%m-%d %H:%M:%S'
+    echo ""
+}
+
+# 显示更新的文件
+show_updated_files() {
+    log_info "更新的文件："
+    git diff --name-only HEAD@{1} HEAD 2>/dev/null | head -20 | while read file; do
+        echo "  - $file"
+    done
+    local count=$(git diff --name-only HEAD@{1} HEAD 2>/dev/null | wc -l)
+    if [ $count -gt 20 ]; then
+        echo "  ... 还有 $((count - 20)) 个文件"
+    fi
+    echo ""
 }
 
 # 主函数
 main() {
-    local mode="sync"
-    local commit_msg=""
-    local branch=""
+    local branch="$DEFAULT_BRANCH"
+    local show_diff=true
     
     # 解析参数
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --push-only)
-                mode="push"
+            --branch=*)
+                branch="${1#*=}"
                 shift
                 ;;
-            --pull-only)
-                mode="pull"
+            --no-diff)
+                show_diff=false
                 shift
                 ;;
             --help|-h)
-                echo "用法: ./git-sync.sh [commit-message]"
-                echo "       ./git-sync.sh --push-only"
-                echo "       ./git-sync.sh --pull-only"
+                echo "用法: ./strategy-pull.sh [选项]"
+                echo ""
+                echo "功能: 拉取策略仓库的最新代码"
+                echo ""
+                echo "选项:"
+                echo "  --branch=NAME   指定分支 (默认: $DEFAULT_BRANCH)"
+                echo "  --no-diff       不显示更新的文件"
+                echo "  --help, -h      显示帮助信息"
                 echo ""
                 echo "注意: 此脚本仅用于 freqtrade 项目"
                 echo "      必须在项目根目录 /opt/git/freqtrade 下执行"
+                echo ""
+                echo "示例:"
+                echo "  ./strategy-pull.sh                    # 拉取默认分支的最新代码"
+                echo "  ./strategy-pull.sh --branch=main      # 拉取 main 分支"
                 exit 0
                 ;;
             *)
-                if [ -z "$commit_msg" ]; then
-                    commit_msg="$1"
-                elif [ -z "$branch" ]; then
-                    branch="$1"
-                fi
+                log_warning "未知参数: $1"
                 shift
                 ;;
         esac
@@ -172,75 +198,62 @@ main() {
     # 验证是否为 freqtrade 项目
     check_freqtrade_project
     
+    log_step "开始获取策略最新代码"
+    echo ""
+    
     # 设置代理
     set_proxy
     
     # 获取当前分支
     local current_branch=$(get_current_branch)
-    [ -z "$branch" ] && branch="$current_branch"
-    
     log_info "当前分支: $current_branch"
+    log_info "目标分支: $branch"
+    log_info "仓库路径: $EXPECTED_REPO"
+    echo ""
     
-    case $mode in
-        pull)
-            log_info "模式: 仅拉取"
-            git_retry "git pull origin $branch"
-            log_success "拉取完成"
-            ;;
-        push)
-            log_info "模式: 仅推送"
-            if has_unpushed; then
-                git_retry "git push origin $branch"
-                log_success "推送完成"
-            else
-                log_info "没有需要推送的提交"
-            fi
-            ;;
-        sync)
-            log_info "模式: 完整同步（提交 + 拉取 + 推送）"
-            
-            # 1. 检查是否有更改
-            if has_changes; then
-                # 生成提交信息
-                if [ -z "$commit_msg" ]; then
-                    local changed_files=$(git diff --name-only | head -5 | tr '\n' ', ' | sed 's/,$//')
-                    commit_msg="更新: $changed_files"
-                    [ $(git diff --name-only | wc -l) -gt 5 ] && commit_msg="$commit_msg 等"
-                fi
-                
-                # 2. 添加所有更改
-                log_info "添加更改到暂存区..."
-                git add -A
-                
-                # 3. 提交
-                log_info "提交更改: $commit_msg"
-                git commit -m "$commit_msg"
-            else
-                log_info "没有需要提交的更改"
-            fi
-            
-            # 4. 拉取最新代码
-            log_info "拉取远程最新代码..."
-            if ! git_retry "git pull --rebase origin $branch"; then
-                log_error "拉取失败，可能存在冲突，请手动解决后重试"
-                exit 1
-            fi
-            
-            # 5. 推送
-            if has_unpushed || has_changes; then
-                log_info "推送到远程仓库..."
-                if ! git_retry "git push origin $branch"; then
-                    log_error "推送失败"
-                    exit 1
-                fi
-                log_success "推送完成"
-            else
-                log_info "没有需要推送的提交"
-            fi
-            
-            log_success "同步完成！"
-            ;;
-    esac
+    # 如果当前分支与目标分支不同，切换分支
+    if [ "$current_branch" != "$branch" ]; then
+        log_info "切换到分支: $branch"
+        git checkout "$branch"
+        echo ""
+    fi
+    
+    # 保存当前 HEAD
+    local old_head=$(git rev-parse HEAD)
+    
+    # 拉取最新代码
+    log_step "拉取远程最新代码..."
+    if ! git_retry "git pull --rebase origin $branch"; then
+        log_error "拉取失败，可能存在冲突，请手动解决后重试"
+        exit 1
+    fi
+    echo ""
+    
+    # 获取新的 HEAD
+    local new_head=$(git rev-parse HEAD)
+    
+    # 显示结果
+    if [ "$old_head" = "$new_head" ]; then
+        log_success "代码已是最新，无需更新"
+    else
+        log_success "代码更新成功！"
+        echo ""
+        
+        # 显示最新提交
+        show_latest_commit
+        
+        # 显示更新的文件
+        if [ "$show_diff" = true ]; then
+            show_updated_files
+        fi
+    fi
+    
+    echo ""
+    
+    # 显示策略目录
+    show_strategies
+    
+    log_success "获取完成！"
 }
 
 # 执行主函数
