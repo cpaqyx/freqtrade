@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "http_proxy": "http://127.0.0.1:7890",
+  "https_proxy": "http://127.0.0.1:7890",
+  "max_open_trades": 3,
+  "stake_currency": "USDT",
+  "stake_amount": 100,
+  "tradable_balance_ratio": 0.3,
+  "timeframe": "5m",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "cancel_open_orders_on_exit": false,
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  "exchange": {
+    "name": "binance",
+    "key": "your_api_key_here",
+    "secret": "your_api_secret_here",
+    "ccxt_config": {
+      "httpsProxy": "http://127.0.0.1:7890",
+      "wsProxy": "http://127.0.0.1:7890",
+      "enableRateLimit": true,
+      "rateLimit": 100
+    },
+    "ccxt_async_config": {
+      "enableRateLimit": true,
+      "rateLimit": 100
+    },
+    "pair_whitelist": [
+      "BTC/USDT:USDT"
+    ]
+  },
+  "fee": 0.0004,
+  "trading_mode": "futures",
+  "margin_mode": "isolated",
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "api_server": {
+    "enabled": false,
+    "listen_ip_address": "127.0.0.1",
+    "listen_port": 8082,
+    "username": "freqtrade",
+    "password": "your_password_here"
+  },
+  "bot_name": "high_rate_sowing_sl_5m",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 5
+  },
+  "strategy": "HighRateSowingSL5m",
+  "strategy_path": "user_data/high_rate_sowing_sl",
+  "db_url": "sqlite:///user_data/high_rate_sowing_sl/tradesv3_5m.sqlite",
+  "user_data_dir": "user_data",
+  "data_dir": "user_data/data/binance",
+  "ui": {
+    "backtest_results_dir": "user_data/backtest_results"
+  }
+}

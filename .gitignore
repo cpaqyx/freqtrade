@@ -28,9 +28,17 @@ hyperopt.html
 # 测试数据和测试结果（你特别提到的）
 tests/
 test_data/
+user_data/data/
 user_data/data/*         # 下载的K线历史数据（体积大，不建议上传）
 user_data/backtest-data/ # 回测专用数据
 backtest-data/
+
+# 日志目录
+user_data/logs/
+
+# 策略结果文件
+rolling_window_results.md
+TOP50_RANKING.md
 
 # 虚拟环境和Python缓存
 venv/
