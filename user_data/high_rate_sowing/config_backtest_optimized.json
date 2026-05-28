@@ -25,19 +25,10 @@
   },
   "exchange": {
     "name": "binance",
-    "key": "your_api_key_here",
-    "secret": "your_api_secret_here",
-    "ccxt_config": {
-      "enableRateLimit": true,
-      "rateLimit": 100,
-      "options": {
-        "defaultType": "swap"
-      }
-    },
-    "ccxt_async_config": {
-      "enableRateLimit": true,
-      "rateLimit": 100
-    },
+    "key": "",
+    "secret": "",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
     "pair_whitelist": [
       "BTC/USDT:USDT",
       "ETH/USDT:USDT",
@@ -57,17 +48,16 @@
     "listen_ip_address": "127.0.0.1",
     "listen_port": 8081,
     "username": "freqtrade",
-    "password": "your_password_here"
+    "password": "freqtrade"
   },
-  "bot_name": "high_rate_sowing",
+  "bot_name": "high_rate_sowing_optimization",
   "initial_state": "running",
   "force_entry_enable": false,
   "internals": {
     "process_throttle_secs": 5
   },
   "strategy": "HighRateSowing",
-  "strategy_path": "user_data/high_rate_sowing",
-  "db_url": "sqlite:///user_data/high_rate_sowing/tradesv3.sqlite",
+  "db_url": "sqlite:///user_data/high_rate_sowing/tradesv3_optimization.sqlite",
   "user_data_dir": "user_data",
   "data_dir": "user_data/data/binance",
   "ui": {

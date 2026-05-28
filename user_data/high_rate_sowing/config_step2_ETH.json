@@ -28,6 +28,8 @@
     "key": "your_api_key_here",
     "secret": "your_api_secret_here",
     "ccxt_config": {
+      "httpsProxy": "http://127.0.0.1:7890",
+      "wsProxy": "http://127.0.0.1:7890",
       "enableRateLimit": true,
       "rateLimit": 100,
       "options": {
@@ -39,9 +41,7 @@
       "rateLimit": 100
     },
     "pair_whitelist": [
-      "BTC/USDT:USDT",
-      "ETH/USDT:USDT",
-      "SOL/USDT:USDT"
+      "ETH/USDT:USDT"
     ]
   },
   "trading_mode": "futures",
@@ -59,7 +59,7 @@
     "username": "freqtrade",
     "password": "your_password_here"
   },
-  "bot_name": "high_rate_sowing",
+  "bot_name": "high_rate_sowing_ETH",
   "initial_state": "running",
   "force_entry_enable": false,
   "internals": {

@@ -69,7 +69,7 @@
   "strategy_path": "user_data/high_rate_sowing",
   "db_url": "sqlite:///user_data/high_rate_sowing/tradesv3.sqlite",
   "user_data_dir": "user_data",
-  "data_dir": "user_data/data",
+  "data_dir": "user_data/data/binance",
   "ui": {
     "backtest_results_dir": "user_data/backtest_results"
   }

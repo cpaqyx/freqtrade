@@ -1,0 +1,41 @@
+{
+  "strategy_name": "HighRateSowing",
+  "params": {
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "candle_rise_threshold": 0.007,
+      "continuous_rise_threshold": 0.002,
+      "entry_near_support_pct": 0.082,
+      "max_drop_from_high": 0.03,
+      "pattern_drop_threshold": 0.02
+    },
+    "sell": {
+      "candle_drop_threshold": 0.005,
+      "continuous_drop_threshold": 0.142,
+      "double_top_higher_threshold": 0.055,
+      "double_top_lower_threshold": 0.1,
+      "dynamic_stoploss_pct": 0.04,
+      "exit_near_resistance_pct": 0.023,
+      "last_down_threshold": 0.09
+    },
+    "roi": {
+      "0": 0.081,
+      "8": 0.038,
+      "19": 0.015,
+      "43": 0
+    },
+    "stoploss": {
+      "stoploss": -0.334
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-05-25 21:40:48.593580+00:00"
+}
