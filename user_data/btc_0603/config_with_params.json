@@ -1,0 +1,110 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  
+  "max_open_trades": 1,
+  "startup_candle_count": 1500,
+  "stake_currency": "USDT",
+  "stake_amount": "unlimited",
+  "tradable_balance_ratio": 0.99,
+  "amend_last_stake_amount": true,
+  "position_adjustment_enable": false,
+  "fiat_display_currency": "USD",
+  
+  "http_proxy": "http://127.0.0.1:7890",
+  "https_proxy": "http://127.0.0.1:7890",
+  
+  "dry_run": true,
+  "dry_run_wallet": 10000,
+  "cancel_open_orders_on_exit": false,
+  
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  
+  "exchange": {
+    "name": "binance",
+    "key": "YOUR_API_KEY",
+    "secret": "YOUR_API_SECRET",
+    "markets_refresh_interval": 5,
+    "ccxt_config": {
+      "httpsProxy": "http://127.0.0.1:7890",
+      "wsProxy": "http://127.0.0.1:7890",
+      "enableRateLimit": true,
+      "rateLimit": 1000,
+      "recvWindow": 30000
+    },
+    "ccxt_async_config": {
+      "enableRateLimit": true,
+      "rateLimit": 1000,
+      "recvWindow": 30000
+    },
+    "pair_whitelist": [
+      "BTC/USDT:USDT"
+    ]
+  },
+  
+  "trading_mode": "futures",
+  "margin_mode": "isolated",
+  "fee": 0.0004,
+  
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8093,
+    "verbosity": "error",
+    "jwt_secret_key": "btc_rebound_strategy_2026",
+    "CORS_origins": ["http://127.0.0.1:3000", "http://localhost:3000"],
+    "username": "admin",
+    "password": "admin123"
+  },
+  
+  "bot_name": "BTC_Rebound_Volume",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  
+  "internals": {
+    "process_throttle_secs": 60,
+    "heartbeat_interval": 300
+  },
+  
+  "strategy": "BTC_Rebound_Volume_Strategy",
+  "strategy_path": "user_data/btc_0603",
+  "db_url": "sqlite:///user_data/btc_0603/tradesv3.dryrun.sqlite",
+  "user_data_dir": "user_data",
+  "data_dir": "user_data/data",
+  
+  "ui": {
+    "backtest_results_dir": "user_data/backtest_results"
+  },
+  
+  "strategy_parameters": {
+    "price_levels": [65000, 64000, 63000, 62000, 61000, 60000, 59000, 58000, 57000, 56000, 55000],
+    "rebound_min_pct": 0.05,
+    "level_buffer_pct": 0.01,
+    "vol_lookback_hours": 24,
+    "vol_confirm_hours": 1,
+    "vol_increase_pct": 0.10,
+    "stoploss_pct": -0.08,
+    "leverage_value": 20,
+    "stake_ratio": 0.20
+  }
+}
