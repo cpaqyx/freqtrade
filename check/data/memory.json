@@ -1,0 +1,192 @@
+{
+  "normal": [
+    {
+      "timestamp": "2026-06-06T17:19:49.693038",
+      "log": "^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:42.143166",
+      "log": "^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:54.867175",
+      "log": "resp = await handler(req)"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:58.941262",
+      "log": "^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:25.126379",
+      "log": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:43.794951",
+      "log": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:22:06.209263",
+      "log": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:03.965230",
+      "log": "await self._api_async.load_markets(reload=reload, params={})"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:18.858385",
+      "log": "result = await self.markets_loading"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:21.787356",
+      "log": "^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:27.592046",
+      "log": "currencies = await self.fetch_currencies()"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:31.426412",
+      "log": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    }
+  ],
+  "network_error": [
+    {
+      "timestamp": "2026-06-06T17:19:27.092989",
+      "error": "2026-04-28 15:20:06,492 - freqtrade.exchange.exchange - ERROR - Could not load markets."
+    },
+    {
+      "timestamp": "2026-06-06T17:19:42.560869",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/connector.py\", line 1432, in _start_tls_connection"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:00.549251",
+      "error": "File \"/usr/lib/python3.12/asyncio/sslproto.py\", line 578, in _on_handshake_complete"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:09.715650",
+      "error": "ConnectionResetError"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:27.040126",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/client.py\", line 1510, in __aenter__"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:45.268707",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/client.py\", line 779, in _request"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:14.425619",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/connector.py\", line 642, in connect"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:27.788775",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/connector.py\", line 1207, in _create_connection"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:57.686427",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/connector.py\", line 1697, in _create_proxy_connection"
+    },
+    {
+      "timestamp": "2026-06-06T17:22:19.427738",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/connector.py\", line 1465, in _start_tls_connection"
+    },
+    {
+      "timestamp": "2026-06-06T17:22:39.847491",
+      "error": "raise client_error(req.connection_key, exc) from exc"
+    },
+    {
+      "timestamp": "2026-06-06T17:22:42.974960",
+      "error": "aiohttp.client_exceptions.ClientConnectorError: Cannot connect to host api.binance.com:443 ssl:default [None]"
+    }
+  ],
+  "other_error": [
+    {
+      "timestamp": "2026-06-06T17:19:30.463144",
+      "error": "Traceback (most recent call last):"
+    },
+    {
+      "timestamp": "2026-06-06T17:19:47.051785",
+      "error": "tls_transport = await self._loop.start_tls("
+    },
+    {
+      "timestamp": "2026-06-06T17:19:53.152507",
+      "error": "File \"/usr/lib/python3.12/asyncio/base_events.py\", line 1304, in start_tls"
+    },
+    {
+      "timestamp": "2026-06-06T17:19:56.813938",
+      "error": "await waiter"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:05.039353",
+      "error": "raise handshake_exc"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:12.471110",
+      "error": "The above exception was the direct cause of the following exception:"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:16.012230",
+      "error": "Traceback (most recent call last):"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:19.584698",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/ccxt/async_support/base/exchange.py\", line 217, in fetch"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:22.773078",
+      "error": "async with session_method(yarl.URL(url, encoded=True),"
+    },
+    {
+      "timestamp": "2026-06-06T17:20:30.946128",
+      "error": "self._resp: _RetType = await self._coro"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:02.311321",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/aiohttp/client.py\", line 734, in _connect_and_send_request"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:07.657705",
+      "error": "conn = await self._connector.connect("
+    },
+    {
+      "timestamp": "2026-06-06T17:21:16.906726",
+      "error": "proto = await self._create_connection(req, traces, timeout)"
+    },
+    {
+      "timestamp": "2026-06-06T17:21:35.740474",
+      "error": "_, proto = await self._create_proxy_connection(req, traces, timeout)"
+    },
+    {
+      "timestamp": "2026-06-06T17:22:02.213378",
+      "error": "return await self._start_tls_connection("
+    },
+    {
+      "timestamp": "2026-06-06T17:22:50.523577",
+      "error": "The above exception was the direct cause of the following exception:"
+    },
+    {
+      "timestamp": "2026-06-06T17:22:53.479387",
+      "error": "Traceback (most recent call last):"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:00.740400",
+      "error": "File \"/opt/git/freqtrade/freqtrade/exchange/exchange.py\", line 667, in _api_reload_markets"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:08.930566",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/ccxt/async_support/base/exchange.py\", line 341, in load_markets"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:11.997643",
+      "error": "raise e"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:15.568012",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/ccxt/async_support/base/exchange.py\", line 333, in load_markets"
+    },
+    {
+      "timestamp": "2026-06-06T17:23:24.395825",
+      "error": "File \"/opt/myenv/lib/python3.12/site-packages/ccxt/async_support/base/exchange.py\", line 298, in load_markets_helper"
+    }
+  ]
+}
