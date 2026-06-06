@@ -551,19 +551,30 @@ class BTCFullPosition2_2(IStrategy):
     def get_open_orders_safe(self, pair: str) -> list:
         """
         获取指定交易对的未成交订单
+        使用 Freqtrade 的 internal methods
         
         返回: 订单列表，失败返回空列表
         """
         try:
-            # 安全获取 exchange 实例
-            try:
-                exchange = self.dp._exchange
-            except AttributeError:
-                exchange = self.exchange
+            # 方法: 使用 Freqtrade 的._api.fetch_open_orders
+            # 这是访问底层 ccxt API 的标准方式
             
-            # 使用 ccxt 的 fetch_open_orders 方法
-            open_orders = exchange.fetch_open_orders(pair)
-            return open_orders if open_orders else []
+            if hasattr(self.dp, '_exchange'):
+                ft_exchange = self.dp._exchange
+            else:
+                ft_exchange = self.exchange
+            
+            # Freqtrade 封装的 exchange 有 ._api 属性指向底层 ccxt
+            if hasattr(ft_exchange, '_api'):
+                ccxt_api = ft_exchange._api
+                
+                # 调用 ccxt 的 fetch_open_orders
+                open_orders = ccxt_api.fetch_open_orders(pair)
+                logger.info(f"[get_open_orders_safe] {pair} 有 {len(open_orders) if open_orders else 0} 个未成交订单")
+                return open_orders if open_orders else []
+            else:
+                logger.warning("[get_open_orders_safe] 无法访问 ccxt API")
+                return []
         
         except Exception as e:
             logger.error(f"[get_open_orders_safe] 获取订单失败: {e}")
@@ -593,16 +604,18 @@ class BTCFullPosition2_2(IStrategy):
                 age_hours = (datetime.now() - order_time).total_seconds() / 3600
                 
                 if age_hours > max_age_hours:
-                    # 安全获取 exchange 实例
-                    try:
-                        exchange = self.dp._exchange
-                    except AttributeError:
-                        exchange = self.exchange
+                    # 获取 ccxt API
+                    if hasattr(self.dp, '_exchange'):
+                        ft_exchange = self.dp._exchange
+                    else:
+                        ft_exchange = self.exchange
                     
-                    # 取消订单
-                    exchange.cancel_order(order['id'], pair)
-                    logger.info(f"[cancel_expired_orders] 取消过期订单: ID={order['id']}, 年龄={age_hours:.1f}小时")
-                    cancelled_count += 1
+                    if hasattr(ft_exchange, '_api'):
+                        ccxt_api = ft_exchange._api
+                        # 取消订单
+                        ccxt_api.cancel_order(order['id'], pair)
+                        logger.info(f"[cancel_expired_orders] 取消过期订单: ID={order['id']}, 年龄={age_hours:.1f}小时")
+                        cancelled_count += 1
             
             if cancelled_count > 0:
                 logger.info(f"[cancel_expired_orders] 共取消 {cancelled_count} 个过期订单")
@@ -629,22 +642,27 @@ class BTCFullPosition2_2(IStrategy):
         
         for attempt in range(1, max_retries + 1):
             try:
-                # 安全获取 exchange 实例
-                try:
-                    exchange = self.dp._exchange
-                except AttributeError:
-                    exchange = self.exchange
+                # 获取 ccxt API
+                if hasattr(self.dp, '_exchange'):
+                    ft_exchange = self.dp._exchange
+                else:
+                    ft_exchange = self.exchange
+                
+                if not hasattr(ft_exchange, '_api'):
+                    logger.error("[place_order] 无法访问 ccxt API")
+                    return False
+                
+                ccxt_api = ft_exchange._api
                 
                 logger.info(f"[place_order] 第 {attempt}/{max_retries} 次尝试: {side} {amount:.8f} @ {price:.2f}")
                 
                 # 创建订单
-                order = exchange.create_order(
-                    pair=pair,
-                    ordertype='limit',
+                order = ccxt_api.create_order(
+                    symbol=pair,
+                    type='limit',
                     side=side,
                     amount=amount,
-                    rate=price,
-                    leverage=1.0
+                    price=price
                 )
                 
                 logger.info(f"[place_order] ✅ 下单成功! 订单ID: {order.get('id')}")
