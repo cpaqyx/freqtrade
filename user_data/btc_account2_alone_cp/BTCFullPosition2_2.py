@@ -547,13 +547,152 @@ class BTCFullPosition2_2(IStrategy):
                           exit_tag: Optional[str], side: str, **kwargs) -> float:
         return proposed_rate * 0.99
 
+    # ==================== 新增：获取未成交订单 ====================
+    def get_open_orders_safe(self, pair: str) -> list:
+        """
+        获取指定交易对的未成交订单
+        
+        返回: 订单列表，失败返回空列表
+        """
+        try:
+            # 安全获取 exchange 实例
+            try:
+                exchange = self.dp._exchange
+            except AttributeError:
+                exchange = self.exchange
+            
+            # 使用 ccxt 的 fetch_open_orders 方法
+            open_orders = exchange.fetch_open_orders(pair)
+            return open_orders if open_orders else []
+        
+        except Exception as e:
+            logger.error(f"[get_open_orders_safe] 获取订单失败: {e}")
+            return []
+
+    # ==================== 新增：取消过期订单 ====================
+    def cancel_expired_orders(self, pair: str, max_age_hours: int = 2) -> int:
+        """
+        取消超过指定时间的未成交订单
+        
+        参数:
+            pair: 交易对
+            max_age_hours: 最大保留时间（小时）
+        
+        返回: 取消的订单数量
+        """
+        try:
+            open_orders = self.get_open_orders_safe(pair)
+            if not open_orders:
+                return 0
+            
+            cancelled_count = 0
+            
+            for order in open_orders:
+                # 计算订单年龄
+                order_time = datetime.fromtimestamp(order['timestamp'] / 1000)
+                age_hours = (datetime.now() - order_time).total_seconds() / 3600
+                
+                if age_hours > max_age_hours:
+                    # 安全获取 exchange 实例
+                    try:
+                        exchange = self.dp._exchange
+                    except AttributeError:
+                        exchange = self.exchange
+                    
+                    # 取消订单
+                    exchange.cancel_order(order['id'], pair)
+                    logger.info(f"[cancel_expired_orders] 取消过期订单: ID={order['id']}, 年龄={age_hours:.1f}小时")
+                    cancelled_count += 1
+            
+            if cancelled_count > 0:
+                logger.info(f"[cancel_expired_orders] 共取消 {cancelled_count} 个过期订单")
+                # 强制同步钱包
+                try:
+                    self.wallets.update()
+                except Exception:
+                    pass
+            
+            return cancelled_count
+        
+        except Exception as e:
+            logger.error(f"[cancel_expired_orders] 取消订单失败: {e}")
+            return 0
+
+    # ==================== 新增：带重试的下单函数 ====================
+    def place_order_with_retry(self, pair: str, side: str, amount: float, price: float, max_retries: int = 3) -> bool:
+        """
+        带网络重试的下单函数
+        
+        返回: True=成功, False=失败
+        """
+        import time
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                # 安全获取 exchange 实例
+                try:
+                    exchange = self.dp._exchange
+                except AttributeError:
+                    exchange = self.exchange
+                
+                logger.info(f"[place_order] 第 {attempt}/{max_retries} 次尝试: {side} {amount:.8f} @ {price:.2f}")
+                
+                # 创建订单
+                order = exchange.create_order(
+                    pair=pair,
+                    ordertype='limit',
+                    side=side,
+                    amount=amount,
+                    rate=price,
+                    leverage=1.0
+                )
+                
+                logger.info(f"[place_order] ✅ 下单成功! 订单ID: {order.get('id')}")
+                return True
+            
+            except Exception as e:
+                logger.error(f"[place_order] 第 {attempt} 次失败: {e}")
+                
+                if attempt < max_retries:
+                    logger.info(f"[place_order] 等待 5 秒后重试...")
+                    time.sleep(5)
+                else:
+                    logger.error(f"[place_order] ❌ 下单失败，已达最大重试次数")
+                    return False
+        
+        return False
+
     # ==================== 新增：每分钟检查信号并处理无交易时的订单 ====================
     def bot_loop_start(self, **kwargs) -> None:
-        logger.info("执行检查信号并处理无交易时的订单")
+        logger.info("=" * 60)
+        logger.info("[bot_loop_start] 执行检查信号并处理交易")
+        logger.info("=" * 60)
+        
         pair = 'BTC/USDT'
         coin = 'BTC'
         quote = 'USDT'
         
+        # ==================== 步骤1: 取消过期订单（超过2小时） ====================
+        try:
+            cancelled = self.cancel_expired_orders(pair, max_age_hours=2)
+            if cancelled > 0:
+                logger.info(f"[bot_loop_start] 取消了 {cancelled} 个过期订单")
+        except Exception as e:
+            logger.error(f"[bot_loop_start] 取消过期订单失败: {e}")
+        
+        # ==================== 步骤2: 检查未成交订单 ====================
+        try:
+            open_orders = self.get_open_orders_safe(pair)
+            if open_orders:
+                logger.info(f"[bot_loop_start] ⚠️ 发现有 {len(open_orders)} 个未成交订单，跳过本次下单")
+                for order in open_orders:
+                    logger.info(f"  - {order['side']}: {order['amount']:.8f} @ {order['price']:.2f}, ID={order['id']}")
+                return  # 有未成交订单，跳过本次检查
+        except Exception as e:
+            logger.error(f"[bot_loop_start] 检查订单失败: {e}")
+            return  # 网络异常时保守处理，跳过本次下单
+        
+        # ==================== 步骤3: 获取钱包余额 ====================
         # 获取钱包余额（关键：这是实际交易所余额，包括非机器人管理的资产）
         total_coin_balance = self.wallets.get_total(coin)  # 所有BTC（包括非机器人管理的）
         free_quote_balance = self.wallets.get_free(quote)  # 可用USDT
@@ -583,54 +722,41 @@ class BTCFullPosition2_2(IStrategy):
         logger.info(f"  当前价:{current_rate:.2f}, 有开放交易:{has_open_trade}, ")
         logger.info(f"  enter_long:{last_row.get('enter_long', 0)}, exit_long:{last_row.get('exit_long', 0)}")
 
-        # 卖出信号：如果有信号且有持仓（无论是否有开放交易），直接挂限价卖单
+                # 卖出信号：如果有信号且有持仓（无论是否有开放交易），直接挂限价卖单
         if last_row.get('exit_long', 0) == 1 and total_coin_balance > 0:
-            logger.info("[bot_loop_start] 处理卖出信号 - 全卖所有BTC")
+            logger.info("[bot_loop_start] ✅ 检测到卖出信号 - 全卖所有BTC")
             
             # 检查最小交易量
             min_btc_amount = 0.00001  # BTC 最小交易量
             if total_coin_balance < min_btc_amount:
-                logger.info(f"{coin} 可用于交易的数量为：{total_coin_balance:.8f}, 小于最小可买卖单位 {min_btc_amount}，本次忽略")
+                logger.info(f"[bot_loop_start] {coin} 数量 {total_coin_balance:.8f} 小于最小交易量，跳过")
                 return
             
             # 计算卖单参数
             sell_price = current_rate * 0.99  # 限价单：当前价-1%
             amount = total_coin_balance * 0.999  # 留一点防尘埃
             
-            # 安全获取 exchange 实例
-            try:
-                exchange = self.dp._exchange
-            except AttributeError:
-                exchange = self.exchange
-
-            try:
-                order = exchange.create_order(
-                    pair=pair,
-                    ordertype='limit',
-                    side='sell',
-                    amount=amount,
-                    rate=sell_price,
-                    leverage=1.0
-                )
-                logger.info(f"[bot_loop_start] 挂卖单成功: {amount:.8f} {coin} @ {sell_price:.2f}, order_id: {order.get('id')}")
-                
+            # 使用带重试的下单函数
+            success = self.place_order_with_retry(
+                pair=pair,
+                side='sell',
+                amount=amount,
+                price=sell_price,
+                max_retries=3
+            )
+            
+            if success:
+                logger.info(f"[bot_loop_start] 卖单已挂出: {amount:.8f} {coin} @ {sell_price:.2f}")
                 # 强制同步钱包余额
                 try:
                     self.wallets.update()
-                    logger.debug("钱包余额已强制同步")
+                    logger.info("[bot_loop_start] 钱包余额已同步")
                 except Exception as e:
-                    logger.error(f"钱包同步失败: {e}")
-            except Exception as e:
-                logger.error(f"挂卖单失败: {e}")
-                # 即使失败也同步钱包
-                try:
-                    self.wallets.update()
-                except Exception as sync_e:
-                    logger.error(f"钱包同步失败: {sync_e}")
+                    logger.error(f"[bot_loop_start] 钱包同步失败: {e}")
         
-        # 买入信号：如果有信号且有资金（无论是否有开放交易），直接挂限价买单
+                # 买入信号：如果有信号且有资金（无论是否有开放交易），直接挂限价买单
         elif last_row.get('enter_long', 0) == 1 and free_quote_balance > min_stake:
-            logger.info("[bot_loop_start] 处理买入信号 - 全买BTC")
+            logger.info("[bot_loop_start] ✅ 检测到买入信号 - 全买BTC")
             
             buy_price = current_rate * 1.01  # 限价单：当前价+1%
             # 使用几乎全部可用余额，留 0.1% 防尘埃/手续费
@@ -639,39 +765,31 @@ class BTCFullPosition2_2(IStrategy):
             # 检查计算出的 amount 是否满足最小币种数量
             min_btc_amount = 0.00001
             if amount < min_btc_amount:
-                logger.info(f"计算买入 {coin} 数量为：{amount:.8f}, 小于最小可买卖单位 {min_btc_amount} BTC，本次忽略")
+                logger.info(f"[bot_loop_start] 计算买入数量 {amount:.8f} 小于最小交易量，跳过")
                 return
 
             # 检查订单总价值
             order_value = amount * buy_price
             if order_value < min_stake:
-                logger.info(f"订单总价值 {order_value:.2f} USDT 小于最小门槛 {min_stake} USDT，本次忽略")
+                logger.info(f"[bot_loop_start] 订单价值 {order_value:.2f} USDT 小于最小金额，跳过")
                 return
             
-            # 安全获取 exchange 实例
-            try:
-                exchange = self.dp._exchange
-            except AttributeError:
-                exchange = self.exchange
-                
-            try:
-                order = exchange.create_order(
-                    pair=pair,
-                    ordertype='limit',
-                    side='buy',
-                    amount=amount,
-                    rate=buy_price,
-                    leverage=1.0
-                )
-                logger.info(f"[bot_loop_start] 挂买单成功: {amount:.8f} {coin} @ {buy_price:.2f}, order_id: {order.get('id')}")
-            except Exception as e:
-                logger.error(f"挂买单失败: {e}")
-            finally:
-                # 无论成功或失败，都强制同步钱包
+            # 使用带重试的下单函数
+            success = self.place_order_with_retry(
+                pair=pair,
+                side='buy',
+                amount=amount,
+                price=buy_price,
+                max_retries=3
+            )
+            
+            if success:
+                logger.info(f"[bot_loop_start] 买单已挂出: {amount:.8f} {coin} @ {buy_price:.2f}")
+                # 强制同步钱包余额
                 try:
                     self.wallets.update()
-                    logger.debug("钱包余额已强制同步")
-                except Exception as sync_e:
-                    logger.error(f"钱包同步失败: {sync_e}")
-        else:
-            logger.info("[bot_loop_start] 本次没有任何买入或卖信号，或资金/仓位不足，忽略处理")
+                    logger.info("[bot_loop_start] 钱包余额已同步")
+                except Exception as e:
+                    logger.error(f"[bot_loop_start] 钱包同步失败: {e}")
+        
+        
