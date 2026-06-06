@@ -171,9 +171,12 @@ class BTCFullPosition2_1(IStrategy):
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         print("populate_indicators执行")
-        # 强制只用最近 150 根（90天指标 + 60天缓冲）
-        dataframe = dataframe.tail(self.startup_candle_count).copy()
-        # 原有指标计算（无需改动）
+        # 注意：不再截断 dataframe，保持与输入相同的长度
+        # Freqtrade 会根据 startup_candle_count 自动管理数据量
+        input_len = len(dataframe)
+        logger.info(f"[populate_indicators] K线长度: {input_len}")
+        
+        # 原有指标计算
         dataframe['max_90'] = dataframe['high'].rolling(90).max()
         dataframe['min_90'] = dataframe['low'].rolling(90).min()
         dataframe['day_change'] = (dataframe['close'] - dataframe['open']) / dataframe['open']
@@ -181,9 +184,8 @@ class BTCFullPosition2_1(IStrategy):
         dataframe['is_red'] = (dataframe['close'] < dataframe['open']).astype(int)
         dataframe['pattern'] = None
 
-        df_len = len(dataframe)
-        logger.info(f"K线长度：{df_len}")
-        for i in range(90, df_len):
+        # 只从第90根开始计算图形（前面的数据不足以计算90日指标）
+        for i in range(90, len(dataframe)):
             close_prices_90 = dataframe['close'].iloc[i - 89:i + 1].values
             try:
                 pattern = kline_1d_shape(close_prices_90)
